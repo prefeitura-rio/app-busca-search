@@ -45,7 +45,8 @@ build/
 dist/
 
 # Swagger generated files
-docs/
+docs/*
+!docs/openapi-v3.json
 
 # Temporary files
 tmp/
