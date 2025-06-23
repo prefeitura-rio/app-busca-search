@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 RUN go install github.com/swaggo/swag/cmd/swag@v1.16.4 && \
-    /go/bin/swag init --parseDependency --parseInternal --output ./docs
+    /go/bin/swag init -g cmd/api/main.go --parseDependency --parseInternal --output ./docs
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags "-s -w" -o /app/busca ./cmd/api
