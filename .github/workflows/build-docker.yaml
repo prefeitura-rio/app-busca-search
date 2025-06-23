@@ -6,12 +6,11 @@ on:
       - main
       - staging
 
-permissions:
-  contents: write
-  packages: write
-
 jobs:
   build:
+    permissions:
+      contents: write
+      packages: write
     runs-on: ubuntu-latest
 
     steps:
