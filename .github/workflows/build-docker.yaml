@@ -28,7 +28,7 @@ jobs:
           echo "$PWD/bin" >> $GITHUB_PATH
 
       - name: Generate Swagger v2
-        run: swag init -g cmd/server/main.go
+        run: swag init -g cmd/api/main.go
 
       - name: Install swagger2openapi
         run: npm install -g swagger2openapi
