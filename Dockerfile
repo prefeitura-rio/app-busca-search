@@ -26,4 +26,6 @@ COPY --from=builder /app/busca ./busca
 
 ENV GIN_MODE=release
 
+EXPOSE 8080
+
 CMD ["./busca"]
