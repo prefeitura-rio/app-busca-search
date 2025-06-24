@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: app-busca-search
-          image: ghcr.io/prefeitura-rio/app-busca-search:stable
+          image: ghcr.io/prefeitura-rio/app-busca-search:latest
           envFrom:
             - secretRef:
                 name: busca-secrets
