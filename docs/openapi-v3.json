@@ -426,7 +426,7 @@
   },
   "servers": [
     {
-      "url": "https://services.app.dados.rio/app-busca-search"
+      "url": "https://services.staging.app.dados.rio/app-busca-search"
     }
   ],
   "components": {
