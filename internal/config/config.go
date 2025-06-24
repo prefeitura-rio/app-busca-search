@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -20,10 +19,7 @@ type Config struct {
 }
 
 func LoadConfig() *Config {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalln("Error loading .env file")
-	}
+	_ = godotenv.Load()
 
 	return &Config{
 		TypesenseHost: getEnv("TYPESENSE_HOST", "localhost"),
@@ -39,9 +35,8 @@ func LoadConfig() *Config {
 }
 
 func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
+	if value, exists := os.LookupEnv(key); exists {
+		return value
 	}
-	return value
-}
+	return defaultValue
+} 
