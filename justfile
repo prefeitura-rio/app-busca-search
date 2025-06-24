@@ -16,3 +16,6 @@ tidy:
 
 test:
     go test ./...
+
+deploy:
+    ping -c 1 10.10.10.10
