@@ -66,15 +66,6 @@ func (c *Client) GerarEmbedding(ctx context.Context, texto string) ([]float32, e
 	return resp.Embeddings[0].Values, nil
 }
 
-func (c *Client) BuscaComTexto(ctx context.Context, colecao string, query string, pagina int, porPagina int) (map[string]interface{}, error) {
-	vetor, err := c.GerarEmbedding(ctx, query)
-	if err != nil {
-		return c.Busca(colecao, query, pagina, porPagina, nil)
-	}
-	
-	return c.Busca(colecao, query, pagina, porPagina, vetor)
-}
-
 func (c *Client) BuscaMultiColecaoComTexto(ctx context.Context, colecoes []string, query string, pagina int, porPagina int) (map[string]interface{}, error) {
 	vetor, err := c.GerarEmbedding(ctx, query)
 	if err != nil {
@@ -84,114 +75,10 @@ func (c *Client) BuscaMultiColecaoComTexto(ctx context.Context, colecoes []strin
 	return c.BuscaMultiColecao(colecoes, query, pagina, porPagina, vetor)
 }
 
-func (c *Client) Busca(colecao string, query string, pagina int, porPagina int, vetor []float32) (map[string]interface{}, error) {
-	ctx := context.Background()
-	queryStr := query
-	queryByStr := "titulo_texto_normalizado,descricao_texto_normalizado"
-	includeFields := "*"
-	excludeFields := "embedding" // Exclui o campo embedding da resposta para economizar largura de banda
-
-	searchParams := &api.SearchCollectionParams{
-		Q:             &queryStr,
-		QueryBy:       &queryByStr,
-		Page:          &pagina,
-		PerPage:       &porPagina,
-		IncludeFields: &includeFields,
-		ExcludeFields: &excludeFields,
-	}
-
-	if len(vetor) > 0 {
-		vectorStr := "["
-		for i, val := range vetor {
-			if i > 0 {
-				vectorStr += ", "
-			}
-			vectorStr += fmt.Sprintf("%.6f", val)
-		}
-		vectorStr += "]"
-		
-		alpha := 0.3
-		vectorQuery := fmt.Sprintf("embedding:%s=>alpha:%.1f", vectorStr, alpha)
-		searchParams.VectorQuery = &vectorQuery
-	}
-
-	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var resultMap map[string]interface{}
-	jsonData, err := json.Marshal(searchResult)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
-	}
-	
-	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
-		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
-	}
-
-	return resultMap, nil
-}
-
-func (c *Client) BuscaVetorial(colecao string, vetor []float32, pagina int, porPagina int) (map[string]interface{}, error) {
-	ctx := context.Background()
-	includeFields := "*"
-	excludeFields := "embedding"
-	
-	if len(vetor) == 0 {
-		return nil, fmt.Errorf("vetor de embedding é obrigatório para busca vetorial")
-	}
-	
-	vectorStr := "["
-	for i, val := range vetor {
-		if i > 0 {
-			vectorStr += ", "
-		}
-		vectorStr += fmt.Sprintf("%.6f", val)
-	}
-	vectorStr += "]"
-	
-	vectorQuery := fmt.Sprintf("embedding:%s", vectorStr)
-	
-	searchParams := &api.SearchCollectionParams{
-		Page:          &pagina,
-		PerPage:       &porPagina,
-		IncludeFields: &includeFields,
-		ExcludeFields: &excludeFields,
-		VectorQuery:   &vectorQuery,
-	}
-
-	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var resultMap map[string]interface{}
-	jsonData, err := json.Marshal(searchResult)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
-	}
-	
-	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
-		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
-	}
-
-	return resultMap, nil
-}
-
-func (c *Client) BuscaVetorialComTexto(ctx context.Context, colecao string, query string, pagina int, porPagina int) (map[string]interface{}, error) {
-	vetor, err := c.GerarEmbedding(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("não foi possível gerar embedding para busca vetorial: %v", err)
-	}
-	
-	return c.BuscaVetorial(colecao, vetor, pagina, porPagina)
-}
-
 func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, porPagina int, vetor []float32) (map[string]interface{}, error) {
 	ctx := context.Background()
 	queryStr := query
-	queryByStr := "titulo_texto_normalizado,descricao_texto_normalizado"
+	queryByStr := "titulo_texto_normalizado,descricao_texto_normalizado,informacoes_complementares_texto_normalizado,etapas_texto_normalizado,prazo_esperado_texto_normalizado"
 	includeFields := "*"
 	excludeFields := "embedding"
 	var vectorQuery *string
@@ -320,4 +207,71 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 	}
 
 	return resp, nil
+}
+
+// BuscaPorCategoria busca documentos por categoria retornando apenas título e ID
+func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int, porPagina int) (map[string]interface{}, error) {
+	ctx := context.Background()
+	filterBy := fmt.Sprintf("category:=%s", categoria)
+	includeFields := "titulo,id"
+	
+	searchParams := &api.SearchCollectionParams{
+		Q:             stringPtr("*"),
+		FilterBy:      &filterBy,
+		Page:          &pagina,
+		PerPage:       &porPagina,
+		IncludeFields: &includeFields,
+	}
+
+	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, err
+	}
+
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+	
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return resultMap, nil
+}
+
+// BuscaPorID busca um documento específico por ID retornando todos os campos exceto embedding e normalizados
+func (c *Client) BuscaPorID(colecao string, documentoID string) (map[string]interface{}, error) {
+	ctx := context.Background()
+	
+	document, err := c.client.Collection(colecao).Document(documentoID).Retrieve(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(document)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+	
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	// Remove os campos de embedding e normalizados do resultado
+	delete(resultMap, "embedding")
+	delete(resultMap, "titulo_texto_normalizado")
+	delete(resultMap, "descricao_texto_normalizado")
+	delete(resultMap, "informacoes_complementares_texto_normalizado")
+	delete(resultMap, "etapas_texto_normalizado")
+	delete(resultMap, "prazo_esperado_texto_normalizado")
+
+	return resultMap, nil
+}
+
+// stringPtr retorna um ponteiro para string
+func stringPtr(s string) *string {
+	return &s
 }

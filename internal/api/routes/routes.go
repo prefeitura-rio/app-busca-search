@@ -20,13 +20,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	api := r.Group("/api/v1")
 	{
-		api.GET("/busca/:colecao", buscaHandler.Busca)
-		api.GET("/busca/:colecao/vetorial", buscaHandler.BuscaVetorial)
-		
-		api.GET("/busca-auto/:collection", buscaHandler.BuscaHibrida)
-		api.GET("/busca-auto-multi", buscaHandler.BuscaMultiColecao)
-		api.GET("/busca-vetorial-auto/:collection", buscaHandler.BuscaVetorial)
-		api.GET("/busca-app", buscaHandler.BuscaMultiColecaoConteudos)
+		api.GET("/busca-hibrida-multi", buscaHandler.BuscaMultiColecao)
+		api.GET("/categoria/:collection", buscaHandler.BuscaPorCategoria)
+		api.GET("/documento/:collection/:id", buscaHandler.BuscaPorID)
 	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
