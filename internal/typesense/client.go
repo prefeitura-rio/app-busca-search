@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
@@ -254,21 +255,26 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 
 			searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
 			if err != nil {
+				// Se é erro 404 (coleção não encontrada), pula para próxima coleção
+				if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+					log.Printf("Coleção %s não encontrada, pulando para próxima coleção", colecao)
+					break // Sai do loop interno para ir para próxima coleção
+				}
 				// Log do erro mas continua com próxima coleção
 				log.Printf("Erro ao buscar na coleção %s: %v", colecao, err)
-				break
+				break // Sai do loop interno para ir para próxima coleção
 			}
 
 			var resultMap map[string]interface{}
 			jsonData, err := json.Marshal(searchResult)
 			if err != nil {
 				log.Printf("Erro ao serializar resultado da coleção %s: %v", colecao, err)
-				break
+				break // Sai do loop interno para ir para próxima coleção
 			}
 			
 			if err := json.Unmarshal(jsonData, &resultMap); err != nil {
 				log.Printf("Erro ao deserializar resultado da coleção %s: %v", colecao, err)
-				break
+				break // Sai do loop interno para ir para próxima coleção
 			}
 
 			// Captura o total encontrado na primeira página
@@ -516,6 +522,11 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 		
 		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
 		if err != nil {
+			// Se é erro 404 (coleção não encontrada), pula para próxima coleção
+			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+				log.Printf("Coleção %s não encontrada, pulando para próxima coleção", colecao)
+				continue
+			}
 			log.Printf("Erro ao buscar categorias na coleção %s: %v", colecao, err)
 			continue
 		}
@@ -595,6 +606,11 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 		
 		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
 		if err != nil {
+			// Se é erro 404 (coleção não encontrada), pula esta coleção
+			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+				log.Printf("Coleção %s não encontrada para categoria %s, pulando", colecao, categoria)
+				return nil
+			}
 			return err
 		}
 		
