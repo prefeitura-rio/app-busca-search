@@ -74,22 +74,22 @@ func (h *BuscaHandler) BuscaMultiColecao(c *gin.Context) {
 
 // BuscaPorCategoria godoc
 // @Summary Busca documentos por categoria
-// @Description Busca documentos de uma categoria específica retornando apenas título e ID
+// @Description Busca documentos de uma categoria específica em uma ou múltiplas coleções retornando informações completas
 // @Tags busca
 // @Accept json
 // @Produce json
-// @Param collection path string true "Nome da coleção"
+// @Param collections path string true "Nome da coleção ou lista de coleções separadas por vírgula"
 // @Param categoria query string true "Categoria dos documentos"
 // @Param page query int false "Página" default(1)
 // @Param per_page query int false "Resultados por página" default(10)
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/categoria/{collection} [get]
+// @Router /api/v1/categoria/{collections} [get]
 func (h *BuscaHandler) BuscaPorCategoria(c *gin.Context) {
-	colecao := c.Param("collection")
-	if colecao == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nome da coleção é obrigatório"})
+	collectionsParam := c.Param("collections")
+	if collectionsParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nome da(s) coleção(ões) é obrigatório"})
 		return
 	}
 
@@ -109,7 +109,18 @@ func (h *BuscaHandler) BuscaPorCategoria(c *gin.Context) {
 		porPagina = 10
 	}
 
-	resultado, err := h.typesenseClient.BuscaPorCategoria(colecao, categoria, pagina, porPagina)
+	// Verifica se são múltiplas coleções ou uma única
+	colecoes := strings.Split(collectionsParam, ",")
+	
+	var resultado map[string]interface{}
+	if len(colecoes) > 1 {
+		// Múltiplas coleções - usa o método multi-coleção
+		resultado, err = h.typesenseClient.BuscaPorCategoriaMultiColecao(colecoes, categoria, pagina, porPagina)
+	} else {
+		// Uma única coleção - usa o método original (mas agora retorna informações completas)
+		resultado, err = h.typesenseClient.BuscaPorCategoria(colecoes[0], categoria, pagina, porPagina)
+	}
+	
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao buscar por categoria: %v", err)})
 		return

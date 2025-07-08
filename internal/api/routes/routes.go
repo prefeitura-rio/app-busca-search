@@ -21,7 +21,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	api := r.Group("/api/v1")
 	{
 		api.GET("/busca-hibrida-multi", buscaHandler.BuscaMultiColecao)
-		api.GET("/categoria/:collection", buscaHandler.BuscaPorCategoria)
+		api.GET("/categoria/:collections", buscaHandler.BuscaPorCategoria)
 		api.GET("/documento/:collection/:id", buscaHandler.BuscaPorID)
 	}
 

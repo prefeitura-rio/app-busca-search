@@ -78,7 +78,7 @@ func (c *Client) BuscaMultiColecaoComTexto(ctx context.Context, colecoes []strin
 func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, porPagina int, vetor []float32) (map[string]interface{}, error) {
 	ctx := context.Background()
 	queryStr := query
-	queryByStr := "titulo_texto_normalizado,descricao_texto_normalizado,informacoes_complementares_texto_normalizado,etapas_texto_normalizado,prazo_esperado_texto_normalizado"
+	queryByStr := "search_content,titulo,descricao"
 	includeFields := "*"
 	excludeFields := "embedding"
 	var vectorQuery *string
@@ -209,11 +209,102 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 	return resp, nil
 }
 
-// BuscaPorCategoria busca documentos por categoria retornando apenas título e ID
+// BuscaPorCategoriaMultiColecao busca documentos por categoria em múltiplas coleções retornando informações completas
+func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria string, pagina int, porPagina int) (map[string]interface{}, error) {
+	ctx := context.Background()
+	filterBy := fmt.Sprintf("category:=%s", categoria)
+	includeFields := "*"
+	excludeFields := "embedding"
+	
+	searches := make([]api.MultiSearchCollectionParameters, 0, len(colecoes))
+	
+	for _, colecao := range colecoes {
+		colecaoStr := colecao
+		colecaoPtr := &colecaoStr
+		queryStr := "*"
+		collectionParams := api.MultiSearchCollectionParameters{
+			Collection:    colecaoPtr,
+			Q:             &queryStr,
+			FilterBy:      &filterBy,
+			Page:          &pagina,
+			PerPage:       &porPagina,
+			IncludeFields: &includeFields,
+			ExcludeFields: &excludeFields,
+		}
+		
+		searches = append(searches, collectionParams)
+	}
+	
+	searchesParam := api.MultiSearchSearchesParameter{
+		Searches: searches,
+	}
+	
+	searchResult, err := c.client.MultiSearch.Perform(ctx, &api.MultiSearchParams{}, searchesParam)
+	if err != nil {
+		return nil, err
+	}
+
+	// Combina todos os resultados das coleções
+	var allHits []map[string]interface{}
+	totalFound := 0
+
+	for _, res := range searchResult.Results {
+		if res.Found != nil {
+			totalFound += int(*res.Found)
+		}
+		if res.Hits == nil {
+			continue
+		}
+		for _, h := range *res.Hits {
+			hb, _ := json.Marshal(h)
+			var hMap map[string]interface{}
+			_ = json.Unmarshal(hb, &hMap)
+			allHits = append(allHits, hMap)
+		}
+	}
+
+	// Paginação manual dos resultados combinados
+	startIdx := (pagina - 1) * porPagina
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := startIdx + porPagina
+	if endIdx > len(allHits) {
+		endIdx = len(allHits)
+	}
+
+	if startIdx > len(allHits) {
+		startIdx = len(allHits)
+	}
+
+	count := 0
+	if endIdx > startIdx {
+		count = endIdx - startIdx
+	}
+
+	pagedHits := make([]map[string]interface{}, 0, count)
+	if count > 0 {
+		for _, hit := range allHits[startIdx:endIdx] {
+			pagedHits = append(pagedHits, hit)
+		}
+	}
+
+	resp := map[string]interface{}{
+		"found":   totalFound,
+		"out_of":  totalFound,
+		"page":    pagina,
+		"hits":    pagedHits,
+	}
+
+	return resp, nil
+}
+
+// BuscaPorCategoria busca documentos por categoria retornando informações completas
 func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int, porPagina int) (map[string]interface{}, error) {
 	ctx := context.Background()
 	filterBy := fmt.Sprintf("category:=%s", categoria)
-	includeFields := "titulo,id"
+	includeFields := "*"
+	excludeFields := "embedding"
 	
 	searchParams := &api.SearchCollectionParams{
 		Q:             stringPtr("*"),
@@ -221,6 +312,7 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 		Page:          &pagina,
 		PerPage:       &porPagina,
 		IncludeFields: &includeFields,
+		ExcludeFields: &excludeFields,
 	}
 
 	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
@@ -260,13 +352,8 @@ func (c *Client) BuscaPorID(colecao string, documentoID string) (map[string]inte
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
 
-	// Remove os campos de embedding e normalizados do resultado
+	// Remove o campo embedding do resultado
 	delete(resultMap, "embedding")
-	delete(resultMap, "titulo_texto_normalizado")
-	delete(resultMap, "descricao_texto_normalizado")
-	delete(resultMap, "informacoes_complementares_texto_normalizado")
-	delete(resultMap, "etapas_texto_normalizado")
-	delete(resultMap, "prazo_esperado_texto_normalizado")
 
 	return resultMap, nil
 }
