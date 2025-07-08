@@ -107,17 +107,17 @@
         ]
       }
     },
-    "/api/v1/categoria/{collection}": {
+    "/api/v1/categoria/{collections}": {
       "get": {
-        "description": "Busca documentos de uma categoria específica retornando apenas título e ID",
+        "description": "Busca documentos de uma categoria específica em uma ou múltiplas coleções retornando informações completas",
         "tags": [
           "busca"
         ],
         "summary": "Busca documentos por categoria",
         "parameters": [
           {
-            "description": "Nome da coleção",
-            "name": "collection",
+            "description": "Nome da coleção ou lista de coleções separadas por vírgula",
+            "name": "collections",
             "in": "path",
             "required": true,
             "schema": {
