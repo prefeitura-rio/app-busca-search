@@ -198,6 +198,70 @@
         ]
       }
     },
+    "/api/v1/categorias-relevancia": {
+      "get": {
+        "description": "Retorna todas as categorias ordenadas por relevância baseada na volumetria dos serviços",
+        "tags": [
+          "busca"
+        ],
+        "summary": "Busca categorias ordenadas por relevância",
+        "parameters": [
+          {
+            "description": "Lista de coleções separadas por vírgula",
+            "name": "collections",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/documento/{collection}/{id}": {
       "get": {
         "description": "Busca um documento específico por ID retornando todos os campos exceto embedding e campos normalizados",
