@@ -23,6 +23,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		api.GET("/busca-hibrida-multi", buscaHandler.BuscaMultiColecao)
 		api.GET("/categoria/:collections", buscaHandler.BuscaPorCategoria)
 		api.GET("/documento/:collection/:id", buscaHandler.BuscaPorID)
+		api.GET("/categorias-relevancia", buscaHandler.CategoriasRelevancia)
 	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

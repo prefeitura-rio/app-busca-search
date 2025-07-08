@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -16,6 +17,11 @@ type Config struct {
 
 	GeminiAPIKey string
 	GeminiEmbeddingModel string
+
+	// Configurações de relevância
+	RelevanciaArquivo1746          string
+	RelevanciaArquivoCariocaDigital string
+	RelevanciaIntervaloAtualizacao  int // em minutos
 }
 
 func LoadConfig() *Config {
@@ -31,12 +37,26 @@ func LoadConfig() *Config {
 		
 		GeminiAPIKey: getEnv("GEMINI_API_KEY", ""),
 		GeminiEmbeddingModel: getEnv("GEMINI_EMBEDDING_MODEL", "text-embedding-004"),
+		
+		// Configurações de relevância
+		RelevanciaArquivo1746: getEnv("RELEVANCIA_ARQUIVO_1746", "data/volumetria_1746.csv"),
+		RelevanciaArquivoCariocaDigital: getEnv("RELEVANCIA_ARQUIVO_CARIOCA_DIGITAL", "data/volumetria_carioca_digital.csv"),
+		RelevanciaIntervaloAtualizacao: getEnvInt("RELEVANCIA_INTERVALO_ATUALIZACAO", 60),
 	}
 }
 
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
 	}
 	return defaultValue
 } 

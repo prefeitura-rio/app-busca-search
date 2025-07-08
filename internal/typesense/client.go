@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
+	"time"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
+	"github.com/prefeitura-rio/app-busca-search/internal/models"
+	"github.com/prefeitura-rio/app-busca-search/internal/services"
 	"github.com/typesense/typesense-go/v3/typesense"
 	"github.com/typesense/typesense-go/v3/typesense/api"
 	"google.golang.org/genai"
@@ -16,6 +20,7 @@ type Client struct {
 	client *typesense.Client
 	geminiClient *genai.Client
 	embeddingModel string
+	relevanciaService *services.RelevanciaService
 }
 
 func NewClient(cfg *config.Config) *Client {
@@ -31,17 +36,23 @@ func NewClient(cfg *config.Config) *Client {
 	
 	if err != nil {
 		fmt.Printf("Erro ao inicializar cliente Gemini: %v\n", err)
-		return &Client{
-			client: typesenseClient,
-			geminiClient: nil,
-			embeddingModel: cfg.GeminiEmbeddingModel,
-		}
+		geminiClient = nil
 	}
+
+	// Inicializa o serviço de relevância
+	relevanciaConfig := &models.RelevanciaConfig{
+		CaminhoArquivo1746:          cfg.RelevanciaArquivo1746,
+		CaminhoArquivoCariocaDigital: cfg.RelevanciaArquivoCariocaDigital,
+		IntervaloAtualizacao:         cfg.RelevanciaIntervaloAtualizacao,
+	}
+	
+	relevanciaService := services.NewRelevanciaService(relevanciaConfig)
 
 	return &Client{
 		client: typesenseClient,
 		geminiClient: geminiClient,
 		embeddingModel: cfg.GeminiEmbeddingModel,
+		relevanciaService: relevanciaService,
 	}
 }
 
@@ -244,8 +255,14 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 		return nil, err
 	}
 
-	// Combina todos os resultados das coleções
-	var allHits []map[string]interface{}
+	// Wrapper para hits com relevância
+	type hitWithRelevance struct {
+		relevancia int
+		hit        map[string]interface{}
+	}
+
+	// Combina todos os resultados das coleções e adiciona relevância
+	var allHitsWithRelevance []hitWithRelevance
 	totalFound := 0
 
 	for _, res := range searchResult.Results {
@@ -259,9 +276,26 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 			hb, _ := json.Marshal(h)
 			var hMap map[string]interface{}
 			_ = json.Unmarshal(hb, &hMap)
-			allHits = append(allHits, hMap)
+			
+			// Obtém relevância baseada no título
+			relevancia := 0
+			if document, ok := hMap["document"].(map[string]interface{}); ok {
+				if titulo, ok := document["titulo"].(string); ok {
+					relevancia = c.relevanciaService.ObterRelevancia(titulo)
+				}
+			}
+			
+			allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
+				relevancia: relevancia,
+				hit:        hMap,
+			})
 		}
 	}
+
+	// Ordena por relevância (maior relevância primeiro)
+	sort.Slice(allHitsWithRelevance, func(i, j int) bool {
+		return allHitsWithRelevance[i].relevancia > allHitsWithRelevance[j].relevancia
+	})
 
 	// Paginação manual dos resultados combinados
 	startIdx := (pagina - 1) * porPagina
@@ -269,12 +303,12 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 		startIdx = 0
 	}
 	endIdx := startIdx + porPagina
-	if endIdx > len(allHits) {
-		endIdx = len(allHits)
+	if endIdx > len(allHitsWithRelevance) {
+		endIdx = len(allHitsWithRelevance)
 	}
 
-	if startIdx > len(allHits) {
-		startIdx = len(allHits)
+	if startIdx > len(allHitsWithRelevance) {
+		startIdx = len(allHitsWithRelevance)
 	}
 
 	count := 0
@@ -284,8 +318,8 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 
 	pagedHits := make([]map[string]interface{}, 0, count)
 	if count > 0 {
-		for _, hit := range allHits[startIdx:endIdx] {
-			pagedHits = append(pagedHits, hit)
+		for _, hitWithRel := range allHitsWithRelevance[startIdx:endIdx] {
+			pagedHits = append(pagedHits, hitWithRel.hit)
 		}
 	}
 
@@ -306,11 +340,12 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	includeFields := "*"
 	excludeFields := "embedding"
 	
+	// Busca todos os resultados sem paginação para ordenar por relevância
 	searchParams := &api.SearchCollectionParams{
 		Q:             stringPtr("*"),
 		FilterBy:      &filterBy,
-		Page:          &pagina,
-		PerPage:       &porPagina,
+		Page:          intPtr(1),
+		PerPage:       intPtr(1000), // Limite alto para capturar todos os resultados
 		IncludeFields: &includeFields,
 		ExcludeFields: &excludeFields,
 	}
@@ -330,6 +365,75 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
 
+	// Wrapper para hits com relevância
+	type hitWithRelevance struct {
+		relevancia int
+		hit        map[string]interface{}
+	}
+
+	// Extrai hits e adiciona relevância
+	var allHitsWithRelevance []hitWithRelevance
+	totalFound := 0
+	
+	if found, ok := resultMap["found"].(float64); ok {
+		totalFound = int(found)
+	}
+
+	if hits, ok := resultMap["hits"].([]interface{}); ok {
+		for _, h := range hits {
+			if hitMap, ok := h.(map[string]interface{}); ok {
+				// Obtém relevância baseada no título
+				relevancia := 0
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					if titulo, ok := document["titulo"].(string); ok {
+						relevancia = c.relevanciaService.ObterRelevancia(titulo)
+					}
+				}
+				
+				allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
+					relevancia: relevancia,
+					hit:        hitMap,
+				})
+			}
+		}
+	}
+
+	// Ordena por relevância (maior relevância primeiro)
+	sort.Slice(allHitsWithRelevance, func(i, j int) bool {
+		return allHitsWithRelevance[i].relevancia > allHitsWithRelevance[j].relevancia
+	})
+
+	// Paginação manual dos resultados ordenados
+	startIdx := (pagina - 1) * porPagina
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := startIdx + porPagina
+	if endIdx > len(allHitsWithRelevance) {
+		endIdx = len(allHitsWithRelevance)
+	}
+
+	if startIdx > len(allHitsWithRelevance) {
+		startIdx = len(allHitsWithRelevance)
+	}
+
+	count := 0
+	if endIdx > startIdx {
+		count = endIdx - startIdx
+	}
+
+	pagedHits := make([]interface{}, 0, count)
+	if count > 0 {
+		for _, hitWithRel := range allHitsWithRelevance[startIdx:endIdx] {
+			pagedHits = append(pagedHits, hitWithRel.hit)
+		}
+	}
+
+	// Reconstrói o resultado com paginação ordenada
+	resultMap["hits"] = pagedHits
+	resultMap["found"] = totalFound
+	resultMap["page"] = pagina
+	
 	return resultMap, nil
 }
 
@@ -358,7 +462,143 @@ func (c *Client) BuscaPorID(colecao string, documentoID string) (map[string]inte
 	return resultMap, nil
 }
 
+// BuscarCategoriasRelevancia busca todas as categorias e calcula sua relevância baseada na volumetria dos serviços
+func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.CategoriasRelevanciaResponse, error) {
+	ctx := context.Background()
+	
+	// Mapa para acumular relevância por categoria
+	categoriasMap := make(map[string]*models.CategoriaRelevancia)
+	
+	// Para cada coleção, busca todas as categorias
+	for _, colecao := range colecoes {
+		// Busca usando facet para obter categorias únicas
+		searchParams := &api.SearchCollectionParams{
+			Q:         stringPtr("*"),
+			FacetBy:   stringPtr("category"),
+			Page:      intPtr(1),
+			PerPage:   intPtr(0), // Só queremos os facets, não os documentos
+		}
+		
+		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+		if err != nil {
+			log.Printf("Erro ao buscar categorias na coleção %s: %v", colecao, err)
+			continue
+		}
+		
+		// Processa os facets para obter categorias
+		var resultMap map[string]interface{}
+		jsonData, _ := json.Marshal(searchResult)
+		json.Unmarshal(jsonData, &resultMap)
+		
+		if facetCounts, ok := resultMap["facet_counts"].([]interface{}); ok {
+			for _, facet := range facetCounts {
+				if facetMap, ok := facet.(map[string]interface{}); ok {
+					if fieldName, ok := facetMap["field_name"].(string); ok && fieldName == "category" {
+						if counts, ok := facetMap["counts"].([]interface{}); ok {
+							// Para cada categoria, calcula a relevância dos seus serviços
+							for _, count := range counts {
+								if countMap, ok := count.(map[string]interface{}); ok {
+									if categoria, ok := countMap["value"].(string); ok {
+										if categoria != "" {
+											if err := c.calcularRelevanciaCategoria(colecao, categoria, categoriasMap); err != nil {
+												log.Printf("Erro ao calcular relevância da categoria %s: %v", categoria, err)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	// Converte o mapa em slice e ordena por relevância
+	var categorias []models.CategoriaRelevancia
+	for _, categoria := range categoriasMap {
+		// Calcula relevância média
+		if categoria.QuantidadeServicos > 0 {
+			categoria.RelevanciaMedia = float64(categoria.RelevanciaTotal) / float64(categoria.QuantidadeServicos)
+		}
+		categorias = append(categorias, *categoria)
+	}
+	
+	// Ordena por relevância total (maior primeiro)
+	sort.Slice(categorias, func(i, j int) bool {
+		return categorias[i].RelevanciaTotal > categorias[j].RelevanciaTotal
+	})
+	
+	response := &models.CategoriasRelevanciaResponse{
+		Categorias:        categorias,
+		TotalCategorias:   len(categorias),
+		UltimaAtualizacao: time.Now().Format(time.RFC3339),
+	}
+	
+	return response, nil
+}
+
+// calcularRelevanciaCategoria calcula a relevância de uma categoria específica
+func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, categoriasMap map[string]*models.CategoriaRelevancia) error {
+	ctx := context.Background()
+	filterBy := fmt.Sprintf("category:=%s", categoria)
+	
+	searchParams := &api.SearchCollectionParams{
+		Q:             stringPtr("*"),
+		FilterBy:      &filterBy,
+		Page:          intPtr(1),
+		PerPage:       intPtr(1000), // Limite alto para capturar todos os serviços
+		IncludeFields: stringPtr("titulo"),
+		ExcludeFields: stringPtr("embedding"),
+	}
+	
+	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return err
+	}
+	
+	var resultMap map[string]interface{}
+	jsonData, _ := json.Marshal(searchResult)
+	json.Unmarshal(jsonData, &resultMap)
+	
+	relevanciaTotal := 0
+	quantidadeServicos := 0
+	
+	if hits, ok := resultMap["hits"].([]interface{}); ok {
+		for _, h := range hits {
+			if hitMap, ok := h.(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					if titulo, ok := document["titulo"].(string); ok {
+						relevancia := c.relevanciaService.ObterRelevancia(titulo)
+						relevanciaTotal += relevancia
+						quantidadeServicos++
+					}
+				}
+			}
+		}
+	}
+	
+	// Acumula no mapa de categorias (pode existir em múltiplas coleções)
+	if existente, exists := categoriasMap[categoria]; exists {
+		existente.RelevanciaTotal += relevanciaTotal
+		existente.QuantidadeServicos += quantidadeServicos
+	} else {
+		categoriasMap[categoria] = &models.CategoriaRelevancia{
+			Nome:               categoria,
+			RelevanciaTotal:    relevanciaTotal,
+			QuantidadeServicos: quantidadeServicos,
+		}
+	}
+	
+	return nil
+}
+
 // stringPtr retorna um ponteiro para string
 func stringPtr(s string) *string {
 	return &s
+}
+
+// intPtr retorna um ponteiro para int
+func intPtr(i int) *int {
+	return &i
 }

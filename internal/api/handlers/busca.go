@@ -167,3 +167,34 @@ func (h *BuscaHandler) BuscaPorID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resultado)
 }
+
+// CategoriasRelevancia godoc
+// @Summary Busca categorias ordenadas por relevância
+// @Description Retorna todas as categorias ordenadas por relevância baseada na volumetria dos serviços
+// @Tags busca
+// @Accept json
+// @Produce json
+// @Param collections query string true "Lista de coleções separadas por vírgula"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/categorias-relevancia [get]
+func (h *BuscaHandler) CategoriasRelevancia(c *gin.Context) {
+	collectionsParam := c.Query("collections")
+	if collectionsParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Lista de coleções é obrigatória"})
+		return
+	}
+
+	// Parsing das coleções - dividindo a string por vírgulas
+	colecoes := strings.Split(collectionsParam, ",")
+	
+	// Busca categorias com relevância
+	resultado, err := h.typesenseClient.BuscarCategoriasRelevancia(colecoes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao buscar categorias por relevância: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, resultado)
+}
