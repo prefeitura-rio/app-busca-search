@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,11 +47,16 @@ func (s *RelevanciaService) CarregarDados() error {
 	
 	log.Println("Carregando dados de relevância...")
 	
+	// Log do diretório atual para debugging
+	pwd, _ := os.Getwd()
+	log.Printf("Diretório atual: %s", pwd)
+	
 	// Limpa dados existentes
 	s.data.ItensRelevancia = make(map[string]*models.RelevanciaItem)
 	
 	// Carrega dados do 1746 (planilha)
 	if s.config.CaminhoArquivo1746 != "" {
+		log.Printf("Tentando carregar dados do 1746 de: %s", s.config.CaminhoArquivo1746)
 		if err := s.carregarDados1746(); err != nil {
 			log.Printf("Erro ao carregar dados do 1746: %v", err)
 		} else {
@@ -60,6 +66,7 @@ func (s *RelevanciaService) CarregarDados() error {
 	
 	// Carrega dados do carioca-digital (CSV)
 	if s.config.CaminhoArquivoCariocaDigital != "" {
+		log.Printf("Tentando carregar dados do carioca-digital de: %s", s.config.CaminhoArquivoCariocaDigital)
 		if err := s.carregarDadosCariocaDigital(); err != nil {
 			log.Printf("Erro ao carregar dados do carioca-digital: %v", err)
 		} else {
@@ -80,7 +87,15 @@ func (s *RelevanciaService) CarregarDados() error {
 
 // carregarDados1746 carrega dados de volumetria do 1746 de uma planilha CSV
 func (s *RelevanciaService) carregarDados1746() error {
-	file, err := os.Open(s.config.CaminhoArquivo1746)
+	// Resolve o caminho do arquivo
+	resolvedPath, err := s.resolvePath(s.config.CaminhoArquivo1746)
+	if err != nil {
+		return fmt.Errorf("erro ao resolver caminho do arquivo 1746: %v", err)
+	}
+	
+	log.Printf("Abrindo arquivo 1746: %s", resolvedPath)
+	
+	file, err := os.Open(resolvedPath)
 	if err != nil {
 		return fmt.Errorf("erro ao abrir arquivo do 1746: %v", err)
 	}
@@ -153,7 +168,15 @@ func (s *RelevanciaService) carregarDados1746() error {
 
 // carregarDadosCariocaDigital carrega dados de volumetria do carioca-digital
 func (s *RelevanciaService) carregarDadosCariocaDigital() error {
-	file, err := os.Open(s.config.CaminhoArquivoCariocaDigital)
+	// Resolve o caminho do arquivo
+	resolvedPath, err := s.resolvePath(s.config.CaminhoArquivoCariocaDigital)
+	if err != nil {
+		return fmt.Errorf("erro ao resolver caminho do arquivo carioca-digital: %v", err)
+	}
+	
+	log.Printf("Abrindo arquivo carioca-digital: %s", resolvedPath)
+	
+	file, err := os.Open(resolvedPath)
 	if err != nil {
 		return fmt.Errorf("erro ao abrir arquivo do carioca-digital: %v", err)
 	}
@@ -351,4 +374,46 @@ func (s *RelevanciaService) ExportarDados() ([]byte, error) {
 	defer s.mutex.RUnlock()
 	
 	return json.MarshalIndent(s.data, "", "  ")
+} 
+
+// resolvePath resolve path relativo para absoluto se necessário
+func (s *RelevanciaService) resolvePath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("caminho vazio")
+	}
+	
+	// Se já é absoluto, usa como está
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	
+	// Tenta path relativo ao diretório atual
+	if _, err := os.Stat(path); err == nil {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("erro ao converter para path absoluto: %v", err)
+		}
+		return absPath, nil
+	}
+	
+	// Tenta path relativo ao diretório do executável
+	ex, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("erro ao obter executável: %v", err)
+	}
+	
+	exPath := filepath.Dir(ex)
+	fullPath := filepath.Join(exPath, path)
+	
+	if _, err := os.Stat(fullPath); err == nil {
+		return fullPath, nil
+	}
+	
+	// Tenta path relativo ao diretório pai do executável (para casos onde o executável está em /bin ou /cmd)
+	parentPath := filepath.Join(filepath.Dir(exPath), path)
+	if _, err := os.Stat(parentPath); err == nil {
+		return parentPath, nil
+	}
+	
+	return "", fmt.Errorf("arquivo não encontrado: %s (tentado: %s, %s, %s)", path, path, fullPath, parentPath)
 } 
