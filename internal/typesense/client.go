@@ -227,34 +227,6 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 	includeFields := "*"
 	excludeFields := "embedding"
 	
-	searches := make([]api.MultiSearchCollectionParameters, 0, len(colecoes))
-	
-	for _, colecao := range colecoes {
-		colecaoStr := colecao
-		colecaoPtr := &colecaoStr
-		queryStr := "*"
-		collectionParams := api.MultiSearchCollectionParameters{
-			Collection:    colecaoPtr,
-			Q:             &queryStr,
-			FilterBy:      &filterBy,
-			Page:          &pagina,
-			PerPage:       &porPagina,
-			IncludeFields: &includeFields,
-			ExcludeFields: &excludeFields,
-		}
-		
-		searches = append(searches, collectionParams)
-	}
-	
-	searchesParam := api.MultiSearchSearchesParameter{
-		Searches: searches,
-	}
-	
-	searchResult, err := c.client.MultiSearch.Perform(ctx, &api.MultiSearchParams{}, searchesParam)
-	if err != nil {
-		return nil, err
-	}
-
 	// Wrapper para hits com relevância
 	type hitWithRelevance struct {
 		relevancia int
@@ -265,30 +237,74 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 	var allHitsWithRelevance []hitWithRelevance
 	totalFound := 0
 
-	for _, res := range searchResult.Results {
-		if res.Found != nil {
-			totalFound += int(*res.Found)
-		}
-		if res.Hits == nil {
-			continue
-		}
-		for _, h := range *res.Hits {
-			hb, _ := json.Marshal(h)
-			var hMap map[string]interface{}
-			_ = json.Unmarshal(hb, &hMap)
+	// Para cada coleção, busca todos os resultados com paginação
+	for _, colecao := range colecoes {
+		page := 1
+		perPageLimit := 250 // Máximo permitido pelo Typesense
+		
+		for {
+			searchParams := &api.SearchCollectionParams{
+				Q:             stringPtr("*"),
+				FilterBy:      &filterBy,
+				Page:          intPtr(page),
+				PerPage:       intPtr(perPageLimit),
+				IncludeFields: &includeFields,
+				ExcludeFields: &excludeFields,
+			}
+
+			searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+			if err != nil {
+				// Log do erro mas continua com próxima coleção
+				log.Printf("Erro ao buscar na coleção %s: %v", colecao, err)
+				break
+			}
+
+			var resultMap map[string]interface{}
+			jsonData, err := json.Marshal(searchResult)
+			if err != nil {
+				log.Printf("Erro ao serializar resultado da coleção %s: %v", colecao, err)
+				break
+			}
 			
-			// Obtém relevância baseada no título
-			relevancia := 0
-			if document, ok := hMap["document"].(map[string]interface{}); ok {
-				if titulo, ok := document["titulo"].(string); ok {
-					relevancia = c.relevanciaService.ObterRelevancia(titulo)
+			if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+				log.Printf("Erro ao deserializar resultado da coleção %s: %v", colecao, err)
+				break
+			}
+
+			// Captura o total encontrado na primeira página
+			if page == 1 {
+				if found, ok := resultMap["found"].(float64); ok {
+					totalFound += int(found)
+				}
+			}
+
+			hitsCount := 0
+			if hits, ok := resultMap["hits"].([]interface{}); ok {
+				hitsCount = len(hits)
+				for _, h := range hits {
+					if hitMap, ok := h.(map[string]interface{}); ok {
+						// Obtém relevância baseada no título
+						relevancia := 0
+						if document, ok := hitMap["document"].(map[string]interface{}); ok {
+							if titulo, ok := document["titulo"].(string); ok {
+								relevancia = c.relevanciaService.ObterRelevancia(titulo)
+							}
+						}
+						
+						allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
+							relevancia: relevancia,
+							hit:        hitMap,
+						})
+					}
 				}
 			}
 			
-			allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
-				relevancia: relevancia,
-				hit:        hMap,
-			})
+			// Se retornou menos que perPageLimit, chegamos ao fim desta coleção
+			if hitsCount < perPageLimit {
+				break
+			}
+			
+			page++
 		}
 	}
 
@@ -340,31 +356,6 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	includeFields := "*"
 	excludeFields := "embedding"
 	
-	// Busca todos os resultados sem paginação para ordenar por relevância
-	searchParams := &api.SearchCollectionParams{
-		Q:             stringPtr("*"),
-		FilterBy:      &filterBy,
-		Page:          intPtr(1),
-		PerPage:       intPtr(1000), // Limite alto para capturar todos os resultados
-		IncludeFields: &includeFields,
-		ExcludeFields: &excludeFields,
-	}
-
-	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
-	if err != nil {
-		return nil, err
-	}
-
-	var resultMap map[string]interface{}
-	jsonData, err := json.Marshal(searchResult)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
-	}
-	
-	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
-		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
-	}
-
 	// Wrapper para hits com relevância
 	type hitWithRelevance struct {
 		relevancia int
@@ -375,27 +366,69 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	var allHitsWithRelevance []hitWithRelevance
 	totalFound := 0
 	
-	if found, ok := resultMap["found"].(float64); ok {
-		totalFound = int(found)
-	}
+	// Busca todos os resultados com paginação para não ultrapassar limite do Typesense
+	page := 1
+	perPageLimit := 250 // Máximo permitido pelo Typesense
+	
+	for {
+		searchParams := &api.SearchCollectionParams{
+			Q:             stringPtr("*"),
+			FilterBy:      &filterBy,
+			Page:          intPtr(page),
+			PerPage:       intPtr(perPageLimit),
+			IncludeFields: &includeFields,
+			ExcludeFields: &excludeFields,
+		}
 
-	if hits, ok := resultMap["hits"].([]interface{}); ok {
-		for _, h := range hits {
-			if hitMap, ok := h.(map[string]interface{}); ok {
-				// Obtém relevância baseada no título
-				relevancia := 0
-				if document, ok := hitMap["document"].(map[string]interface{}); ok {
-					if titulo, ok := document["titulo"].(string); ok {
-						relevancia = c.relevanciaService.ObterRelevancia(titulo)
-					}
-				}
-				
-				allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
-					relevancia: relevancia,
-					hit:        hitMap,
-				})
+		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+		if err != nil {
+			return nil, err
+		}
+
+		var resultMap map[string]interface{}
+		jsonData, err := json.Marshal(searchResult)
+		if err != nil {
+			return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+		}
+		
+		if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+			return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+		}
+
+		// Captura o total encontrado na primeira página
+		if page == 1 {
+			if found, ok := resultMap["found"].(float64); ok {
+				totalFound = int(found)
 			}
 		}
+
+		hitsCount := 0
+		if hits, ok := resultMap["hits"].([]interface{}); ok {
+			hitsCount = len(hits)
+			for _, h := range hits {
+				if hitMap, ok := h.(map[string]interface{}); ok {
+					// Obtém relevância baseada no título
+					relevancia := 0
+					if document, ok := hitMap["document"].(map[string]interface{}); ok {
+						if titulo, ok := document["titulo"].(string); ok {
+							relevancia = c.relevanciaService.ObterRelevancia(titulo)
+						}
+					}
+					
+					allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
+						relevancia: relevancia,
+						hit:        hitMap,
+					})
+				}
+			}
+		}
+		
+		// Se retornou menos que perPageLimit, chegamos ao fim
+		if hitsCount < perPageLimit {
+			break
+		}
+		
+		page++
 	}
 
 	// Ordena por relevância (maior relevância primeiro)
@@ -430,11 +463,13 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	}
 
 	// Reconstrói o resultado com paginação ordenada
-	resultMap["hits"] = pagedHits
-	resultMap["found"] = totalFound
-	resultMap["page"] = pagina
+	finalResultMap := map[string]interface{}{
+		"hits":  pagedHits,
+		"found": totalFound,
+		"page":  pagina,
+	}
 	
-	return resultMap, nil
+	return finalResultMap, nil
 }
 
 // BuscaPorID busca um documento específico por ID retornando todos os campos exceto embedding e normalizados
@@ -543,39 +578,52 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 	ctx := context.Background()
 	filterBy := fmt.Sprintf("category:=%s", categoria)
 	
-	searchParams := &api.SearchCollectionParams{
-		Q:             stringPtr("*"),
-		FilterBy:      &filterBy,
-		Page:          intPtr(1),
-		PerPage:       intPtr(1000), // Limite alto para capturar todos os serviços
-		IncludeFields: stringPtr("titulo"),
-		ExcludeFields: stringPtr("embedding"),
-	}
-	
-	searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
-	if err != nil {
-		return err
-	}
-	
-	var resultMap map[string]interface{}
-	jsonData, _ := json.Marshal(searchResult)
-	json.Unmarshal(jsonData, &resultMap)
-	
 	relevanciaTotal := 0
 	quantidadeServicos := 0
+	page := 1
+	perPage := 250 // Máximo permitido pelo Typesense
 	
-	if hits, ok := resultMap["hits"].([]interface{}); ok {
-		for _, h := range hits {
-			if hitMap, ok := h.(map[string]interface{}); ok {
-				if document, ok := hitMap["document"].(map[string]interface{}); ok {
-					if titulo, ok := document["titulo"].(string); ok {
-						relevancia := c.relevanciaService.ObterRelevancia(titulo)
-						relevanciaTotal += relevancia
-						quantidadeServicos++
+	for {
+		searchParams := &api.SearchCollectionParams{
+			Q:             stringPtr("*"),
+			FilterBy:      &filterBy,
+			Page:          intPtr(page),
+			PerPage:       intPtr(perPage),
+			IncludeFields: stringPtr("titulo"),
+			ExcludeFields: stringPtr("embedding"),
+		}
+		
+		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+		if err != nil {
+			return err
+		}
+		
+		var resultMap map[string]interface{}
+		jsonData, _ := json.Marshal(searchResult)
+		json.Unmarshal(jsonData, &resultMap)
+		
+		hitsCount := 0
+		if hits, ok := resultMap["hits"].([]interface{}); ok {
+			hitsCount = len(hits)
+			for _, h := range hits {
+				if hitMap, ok := h.(map[string]interface{}); ok {
+					if document, ok := hitMap["document"].(map[string]interface{}); ok {
+						if titulo, ok := document["titulo"].(string); ok {
+							relevancia := c.relevanciaService.ObterRelevancia(titulo)
+							relevanciaTotal += relevancia
+							quantidadeServicos++
+						}
 					}
 				}
 			}
 		}
+		
+		// Se retornou menos que perPage, chegamos ao fim
+		if hitsCount < perPage {
+			break
+		}
+		
+		page++
 	}
 	
 	// Acumula no mapa de categorias (pode existir em múltiplas coleções)
