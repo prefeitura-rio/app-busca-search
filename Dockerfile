@@ -23,6 +23,7 @@ RUN apk --no-cache add ca-certificates && \
 WORKDIR /app
 
 COPY --from=builder /app/busca ./busca
+COPY --from=builder /src/data ./data
 
 ENV GIN_MODE=release
 
