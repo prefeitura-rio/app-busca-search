@@ -2,9 +2,10 @@ package models
 
 // CategoriaRelevancia representa uma categoria com sua relevância calculada
 type CategoriaRelevancia struct {
-	Nome               string `json:"nome"`
-	RelevanciaTotal    int    `json:"relevancia_total"`
-	QuantidadeServicos int    `json:"quantidade_servicos"`
+	Nome               string  `json:"nome"`
+	NomeNormalizado    string  `json:"nome_normalizado"`
+	RelevanciaTotal    int     `json:"relevancia_total"`
+	QuantidadeServicos int     `json:"quantidade_servicos"`
 	RelevanciaMedia    float64 `json:"relevancia_media"`
 }
 

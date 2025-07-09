@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prefeitura-rio/app-busca-search/internal/constants"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
+	"github.com/prefeitura-rio/app-busca-search/internal/utils"
 )
 
 type BuscaHandler struct {
@@ -93,11 +95,15 @@ func (h *BuscaHandler) BuscaPorCategoria(c *gin.Context) {
 		return
 	}
 
-	categoria := c.Query("categoria")
-	if categoria == "" {
+	categoriaParam := c.Query("categoria")
+	if categoriaParam == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Categoria é obrigatória"})
 		return
 	}
+
+	// Normaliza o parâmetro categoria e encontra a categoria original correspondente
+	categoriaNormalizada := utils.NormalizarCategoria(categoriaParam)
+	categoria := utils.DesnormalizarCategoria(categoriaNormalizada, constants.CategoriasValidas)
 
 	pagina, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil || pagina < 1 {

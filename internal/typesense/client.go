@@ -12,6 +12,7 @@ import (
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/prefeitura-rio/app-busca-search/internal/services"
+	"github.com/prefeitura-rio/app-busca-search/internal/utils"
 	"github.com/typesense/typesense-go/v3/typesense"
 	"github.com/typesense/typesense-go/v3/typesense/api"
 	"google.golang.org/genai"
@@ -567,6 +568,10 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 		if categoria.QuantidadeServicos > 0 {
 			categoria.RelevanciaMedia = float64(categoria.RelevanciaTotal) / float64(categoria.QuantidadeServicos)
 		}
+		
+		// Adiciona nome normalizado
+		categoria.NomeNormalizado = utils.NormalizarCategoria(categoria.Nome)
+		
 		categorias = append(categorias, *categoria)
 	}
 	
