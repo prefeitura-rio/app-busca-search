@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
+	"github.com/prefeitura-rio/app-busca-search/internal/constants"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/prefeitura-rio/app-busca-search/internal/services"
 	"github.com/prefeitura-rio/app-busca-search/internal/utils"
@@ -511,6 +512,16 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 	// Mapa para acumular relevância por categoria
 	categoriasMap := make(map[string]*models.CategoriaRelevancia)
 	
+	// Inicializa todas as categorias válidas com valores zerados
+	for _, categoria := range constants.CategoriasValidas {
+		categoriasMap[categoria] = &models.CategoriaRelevancia{
+			Nome:               categoria,
+			RelevanciaTotal:    0,
+			QuantidadeServicos: 0,
+			RelevanciaMedia:    0.0,
+		}
+	}
+	
 	// Para cada coleção, busca todas as categorias
 	for _, colecao := range colecoes {
 		// Busca usando facet para obter categorias únicas
@@ -542,7 +553,7 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 				if facetMap, ok := facet.(map[string]interface{}); ok {
 					if fieldName, ok := facetMap["field_name"].(string); ok && fieldName == "category" {
 						if counts, ok := facetMap["counts"].([]interface{}); ok {
-							// Para cada categoria, calcula a relevância dos seus serviços
+							// Para cada categoria encontrada nos dados, calcula a relevância dos seus serviços
 							for _, count := range counts {
 								if countMap, ok := count.(map[string]interface{}); ok {
 									if categoria, ok := countMap["value"].(string); ok {
@@ -660,6 +671,60 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 	}
 	
 	return nil
+}
+
+// DiagnosticarCategoriasExistentes lista todas as categorias que existem nos dados das coleções
+func (c *Client) DiagnosticarCategoriasExistentes(colecoes []string) (map[string]int, error) {
+	ctx := context.Background()
+	categoriasEncontradas := make(map[string]int)
+	
+	// Para cada coleção, busca todas as categorias
+	for _, colecao := range colecoes {
+		// Busca usando facet para obter categorias únicas
+		searchParams := &api.SearchCollectionParams{
+			Q:         stringPtr("*"),
+			FacetBy:   stringPtr("category"),
+			Page:      intPtr(1),
+			PerPage:   intPtr(0), // Só queremos os facets, não os documentos
+		}
+		
+		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
+		if err != nil {
+			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+				log.Printf("Coleção %s não encontrada, pulando para próxima coleção", colecao)
+				continue
+			}
+			log.Printf("Erro ao buscar categorias na coleção %s: %v", colecao, err)
+			continue
+		}
+		
+		// Processa os facets para obter categorias
+		var resultMap map[string]interface{}
+		jsonData, _ := json.Marshal(searchResult)
+		json.Unmarshal(jsonData, &resultMap)
+		
+		if facetCounts, ok := resultMap["facet_counts"].([]interface{}); ok {
+			for _, facet := range facetCounts {
+				if facetMap, ok := facet.(map[string]interface{}); ok {
+					if fieldName, ok := facetMap["field_name"].(string); ok && fieldName == "category" {
+						if counts, ok := facetMap["counts"].([]interface{}); ok {
+							for _, count := range counts {
+								if countMap, ok := count.(map[string]interface{}); ok {
+									if categoria, ok := countMap["value"].(string); ok {
+										if quantidade, ok := countMap["count"].(float64); ok {
+											categoriasEncontradas[categoria] += int(quantidade)
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	return categoriasEncontradas, nil
 }
 
 // stringPtr retorna um ponteiro para string
