@@ -3,6 +3,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: app-busca-search
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   selector:
@@ -37,8 +39,8 @@ metadata:
   name: app-busca-search
 spec:
   ports:
-    - name: "80"
-      port: 80
+    - name: "8080"
+      port: 8080
       targetPort: 8080
   selector:
     app: app-busca-search

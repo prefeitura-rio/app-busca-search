@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -16,155 +15,10 @@ type BuscaHandler struct {
 	typesenseClient *typesense.Client
 }
 
-type BuscaHibridaRequest struct {
-	Texto     string    `json:"texto" binding:"required"`
-	Embedding []float32 `json:"embedding" binding:"required"`
-}
-
-type BuscaHibridaMultiRequest struct {
-	Texto     string    `json:"texto" binding:"required"`
-	Embedding []float32 `json:"embedding" binding:"required"`
-	Colecoes  []string  `json:"colecoes" binding:"required"`
-}
-
 func NewBuscaHandler(client *typesense.Client) *BuscaHandler {
 	return &BuscaHandler{
 		typesenseClient: client,
 	}
-}
-
-// Busca godoc
-// @Summary      Busca documentos
-// @Description  Realiza uma busca híbrida (texto + vetor) na base do Typesense
-// @Tags         busca
-// @Accept       json
-// @Produce      json
-// @Param        colecao    path     string  true  "Nome da coleção"
-// @Param        q          query    string  true  "Termo de busca"
-// @Param        pagina     query    int     false "Número da página atual"
-// @Param        por_pagina query    int     false "Itens por página"
-// @Param        embedding  query    string  false "Vetor de embedding (no formato JSON: [0.1,0.2,...]))"
-// @Success      200        {object} map[string]interface{}
-// @Router       /busca/{colecao} [get]
-func (h *BuscaHandler) Busca(c *gin.Context) {
-	colecao := c.Param("colecao")
-	query := c.Query("q")
-	
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"erro": "O parâmetro de busca 'q' é obrigatório"})
-		return
-	}
-
-	pagina, _ := strconv.Atoi(c.DefaultQuery("pagina", "1"))
-	porPagina, _ := strconv.Atoi(c.DefaultQuery("por_pagina", "10"))
-
-	var vetor []float32
-	embeddingStr := c.Query("embedding")
-	if embeddingStr != "" {
-		if err := json.Unmarshal([]byte(embeddingStr), &vetor); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"erro": "Formato de vetor de embedding inválido. Deve ser um array JSON: [0.1,0.2,...]"})
-			return
-		}
-	}
-
-	resultado, err := h.typesenseClient.Busca(colecao, query, pagina, porPagina, vetor)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"erro": "Erro ao realizar a busca: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, resultado)
-}
-
-// BuscaVetorial godoc
-// @Summary      Busca vetorial
-// @Description  Realiza uma busca puramente vetorial (por similaridade) na base do Typesense
-// @Tags         busca
-// @Accept       json
-// @Produce      json
-// @Param        colecao    path     string  true  "Nome da coleção"
-// @Param        pagina     query    int     false "Número da página atual"
-// @Param        por_pagina query    int     false "Itens por página"
-// @Param        embedding  query    string  true  "Vetor de embedding (no formato JSON: [0.1,0.2,...]))"
-// @Success      200        {object} map[string]interface{}
-// @Router       /busca/{colecao}/vetorial [get]
-func (h *BuscaHandler) BuscaVetorial(c *gin.Context) {
-	colecao := c.Param("colecao")
-	pagina, _ := strconv.Atoi(c.DefaultQuery("pagina", "1"))
-	porPagina, _ := strconv.Atoi(c.DefaultQuery("por_pagina", "10"))
-
-	embeddingStr := c.Query("embedding")
-	if embeddingStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"erro": "O parâmetro 'embedding' é obrigatório para busca vetorial"})
-		return
-	}
-
-	var vetor []float32
-	if err := json.Unmarshal([]byte(embeddingStr), &vetor); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"erro": "Formato de vetor de embedding inválido. Deve ser um array JSON: [0.1,0.2,...]"})
-		return
-	}
-
-	if len(vetor) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"erro": "Vetor de embedding não pode estar vazio"})
-		return
-	}
-
-	resultado, err := h.typesenseClient.BuscaVetorial(colecao, vetor, pagina, porPagina)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"erro": "Erro ao realizar a busca vetorial: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, resultado)
-}
-
-// BuscaHibrida godoc
-// @Summary Busca híbrida no Typesense
-// @Description Realiza uma busca híbrida combinando texto e embeddings no Typesense
-// @Tags busca
-// @Accept json
-// @Produce json
-// @Param collection path string true "Nome da coleção"
-// @Param q query string true "Termo de busca"
-// @Param page query int false "Página" default(1)
-// @Param per_page query int false "Resultados por página" default(10)
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/v1/busca/{collection} [get]
-func (h *BuscaHandler) BuscaHibrida(c *gin.Context) {
-	colecao := c.Param("collection")
-	if colecao == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Nome da coleção é obrigatório"})
-		return
-	}
-
-	query := c.Query("q")
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Termo de busca é obrigatório"})
-		return
-	}
-
-	pagina, err := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if err != nil || pagina < 1 {
-		pagina = 1
-	}
-
-	porPagina, err := strconv.Atoi(c.DefaultQuery("per_page", "10"))
-	if err != nil || porPagina < 1 || porPagina > 100 {
-		porPagina = 10
-	}
-
-	// Realiza a busca
-	ctx := context.Background()
-	resultado, err := h.typesenseClient.BuscaComTexto(ctx, colecao, query, pagina, porPagina)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao realizar busca: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, resultado)
 }
 
 // BuscaMultiColecao godoc
@@ -180,7 +34,7 @@ func (h *BuscaHandler) BuscaHibrida(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/busca-auto-multi [get]
+// @Router /api/v1/busca-hibrida-multi [get]
 func (h *BuscaHandler) BuscaMultiColecao(c *gin.Context) {
 	collectionsParam := c.Query("collections")
 	if collectionsParam == "" {
@@ -218,34 +72,33 @@ func (h *BuscaHandler) BuscaMultiColecao(c *gin.Context) {
 	c.JSON(http.StatusOK, resultado)
 }
 
-// BuscaMultiColecaoConteudos godoc
-// @Summary Busca conteúdos em várias coleções (formato simplificado)
-// @Description Realiza uma busca híbrida em várias coleções e retorna apenas os campos resumo_web (text) e url (cta_url)
+// BuscaPorCategoria godoc
+// @Summary Busca documentos por categoria
+// @Description Busca documentos de uma categoria específica em uma ou múltiplas coleções retornando informações completas
 // @Tags busca
 // @Accept json
 // @Produce json
-// @Param collections query string true "Lista de coleções separadas por vírgula"
-// @Param q query string true "Termo de busca"
+// @Param collections path string true "Nome da coleção ou lista de coleções separadas por vírgula"
+// @Param categoria query string true "Categoria dos documentos"
 // @Param page query int false "Página" default(1)
 // @Param per_page query int false "Resultados por página" default(10)
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /api/v1/busca-app [get]
-func (h *BuscaHandler) BuscaMultiColecaoConteudos(c *gin.Context) {
-	collectionsParam := c.Query("collections")
+// @Router /api/v1/categoria/{collections} [get]
+func (h *BuscaHandler) BuscaPorCategoria(c *gin.Context) {
+	collectionsParam := c.Param("collections")
 	if collectionsParam == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Lista de coleções é obrigatória"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nome da(s) coleção(ões) é obrigatório"})
 		return
 	}
 
-	query := c.Query("q")
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Termo de busca é obrigatório"})
+	categoria := c.Query("categoria")
+	if categoria == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Categoria é obrigatória"})
 		return
 	}
 
-	// Parâmetros opcionais
 	pagina, err := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if err != nil || pagina < 1 {
 		pagina = 1
@@ -256,48 +109,92 @@ func (h *BuscaHandler) BuscaMultiColecaoConteudos(c *gin.Context) {
 		porPagina = 10
 	}
 
+	// Verifica se são múltiplas coleções ou uma única
 	colecoes := strings.Split(collectionsParam, ",")
-
-	ctx := context.Background()
-	resultado, err := h.typesenseClient.BuscaMultiColecaoComTexto(ctx, colecoes, query, pagina, porPagina)
+	
+	var resultado map[string]interface{}
+	if len(colecoes) > 1 {
+		// Múltiplas coleções - usa o método multi-coleção
+		resultado, err = h.typesenseClient.BuscaPorCategoriaMultiColecao(colecoes, categoria, pagina, porPagina)
+	} else {
+		// Uma única coleção - usa o método original (mas agora retorna informações completas)
+		resultado, err = h.typesenseClient.BuscaPorCategoria(colecoes[0], categoria, pagina, porPagina)
+	}
+	
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao realizar busca: %v", err)})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao buscar por categoria: %v", err)})
 		return
 	}
 
-	contents := make([]map[string]interface{}, 0)
-
-	switch hitsVal := resultado["hits"].(type) {
-	case []interface{}:
-		for _, hRaw := range hitsVal {
-			hMap, ok := hRaw.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			processHitForContent(&contents, hMap)
-		}
-	case []map[string]interface{}:
-		for _, hMap := range hitsVal {
-			processHitForContent(&contents, hMap)
-		}
-	}
-
-	c.JSON(http.StatusOK, gin.H{"contents": contents})
+	c.JSON(http.StatusOK, resultado)
 }
 
-func processHitForContent(contents *[]map[string]interface{}, hMap map[string]interface{}) {
-	doc, ok := hMap["document"].(map[string]interface{})
-	if !ok {
+// BuscaPorID godoc
+// @Summary Busca documento por ID
+// @Description Busca um documento específico por ID retornando todos os campos exceto embedding e campos normalizados
+// @Tags busca
+// @Accept json
+// @Produce json
+// @Param collection path string true "Nome da coleção"
+// @Param id path string true "ID do documento"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/documento/{collection}/{id} [get]
+func (h *BuscaHandler) BuscaPorID(c *gin.Context) {
+	colecao := c.Param("collection")
+	if colecao == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Nome da coleção é obrigatório"})
 		return
 	}
 
-	resumo, _ := doc["resumo_web"].(string)
-	urlStr, _ := doc["url"].(string)
-
-	if resumo != "" && urlStr != "" {
-		*contents = append(*contents, map[string]interface{}{
-			"text":    resumo,
-			"cta_url": urlStr,
-		})
+	documentoID := c.Param("id")
+	if documentoID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID do documento é obrigatório"})
+		return
 	}
+
+	resultado, err := h.typesenseClient.BuscaPorID(colecao, documentoID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Documento não encontrado"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao buscar documento: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, resultado)
+}
+
+// CategoriasRelevancia godoc
+// @Summary Busca categorias ordenadas por relevância
+// @Description Retorna todas as categorias ordenadas por relevância baseada na volumetria dos serviços
+// @Tags busca
+// @Accept json
+// @Produce json
+// @Param collections query string true "Lista de coleções separadas por vírgula"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/categorias-relevancia [get]
+func (h *BuscaHandler) CategoriasRelevancia(c *gin.Context) {
+	collectionsParam := c.Query("collections")
+	if collectionsParam == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Lista de coleções é obrigatória"})
+		return
+	}
+
+	// Parsing das coleções - dividindo a string por vírgulas
+	colecoes := strings.Split(collectionsParam, ",")
+	
+	// Busca categorias com relevância
+	resultado, err := h.typesenseClient.BuscarCategoriasRelevancia(colecoes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Erro ao buscar categorias por relevância: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, resultado)
 }

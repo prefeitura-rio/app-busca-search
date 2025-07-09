@@ -16,98 +16,7 @@
     "version": "1.0"
   },
   "paths": {
-    "/api/v1/busca-app": {
-      "get": {
-        "description": "Realiza uma busca híbrida em várias coleções e retorna apenas os campos resumo_web (text) e url (cta_url)",
-        "tags": [
-          "busca"
-        ],
-        "summary": "Busca conteúdos em várias coleções (formato simplificado)",
-        "parameters": [
-          {
-            "description": "Lista de coleções separadas por vírgula",
-            "name": "collections",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Termo de busca",
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Página",
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            }
-          },
-          {
-            "description": "Resultados por página",
-            "name": "per_page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 10
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/busca-auto-multi": {
+    "/api/v1/busca-hibrida-multi": {
       "get": {
         "description": "Realiza uma busca híbrida em várias coleções combinando texto e embeddings",
         "tags": [
@@ -198,17 +107,17 @@
         ]
       }
     },
-    "/api/v1/busca/{collection}": {
+    "/api/v1/categoria/{collections}": {
       "get": {
-        "description": "Realiza uma busca híbrida combinando texto e embeddings no Typesense",
+        "description": "Busca documentos de uma categoria específica em uma ou múltiplas coleções retornando informações completas",
         "tags": [
           "busca"
         ],
-        "summary": "Busca híbrida no Typesense",
+        "summary": "Busca documentos por categoria",
         "parameters": [
           {
-            "description": "Nome da coleção",
-            "name": "collection",
+            "description": "Nome da coleção ou lista de coleções separadas por vírgula",
+            "name": "collections",
             "in": "path",
             "required": true,
             "schema": {
@@ -216,8 +125,8 @@
             }
           },
           {
-            "description": "Termo de busca",
-            "name": "q",
+            "description": "Categoria dos documentos",
+            "name": "categoria",
             "in": "query",
             "required": true,
             "schema": {
@@ -289,52 +198,19 @@
         ]
       }
     },
-    "/busca/{colecao}": {
+    "/api/v1/categorias-relevancia": {
       "get": {
-        "description": "Realiza uma busca híbrida (texto + vetor) na base do Typesense",
+        "description": "Retorna todas as categorias ordenadas por relevância baseada na volumetria dos serviços",
         "tags": [
           "busca"
         ],
-        "summary": "Busca documentos",
+        "summary": "Busca categorias ordenadas por relevância",
         "parameters": [
           {
-            "description": "Nome da coleção",
-            "name": "colecao",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Termo de busca",
-            "name": "q",
+            "description": "Lista de coleções separadas por vírgula",
+            "name": "collections",
             "in": "query",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Número da página atual",
-            "name": "pagina",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Itens por página",
-            "name": "por_pagina",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Vetor de embedding (no formato JSON: [0.1,0.2,...]))",
-            "name": "embedding",
-            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -351,6 +227,32 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -360,17 +262,17 @@
         ]
       }
     },
-    "/busca/{colecao}/vetorial": {
+    "/api/v1/documento/{collection}/{id}": {
       "get": {
-        "description": "Realiza uma busca puramente vetorial (por similaridade) na base do Typesense",
+        "description": "Busca um documento específico por ID retornando todos os campos exceto embedding e campos normalizados",
         "tags": [
           "busca"
         ],
-        "summary": "Busca vetorial",
+        "summary": "Busca documento por ID",
         "parameters": [
           {
             "description": "Nome da coleção",
-            "name": "colecao",
+            "name": "collection",
             "in": "path",
             "required": true,
             "schema": {
@@ -378,25 +280,9 @@
             }
           },
           {
-            "description": "Número da página atual",
-            "name": "pagina",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Itens por página",
-            "name": "por_pagina",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Vetor de embedding (no formato JSON: [0.1,0.2,...]))",
-            "name": "embedding",
-            "in": "query",
+            "description": "ID do documento",
+            "name": "id",
+            "in": "path",
             "required": true,
             "schema": {
               "type": "string"
@@ -411,6 +297,45 @@
                 "schema": {
                   "type": "object",
                   "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -426,7 +351,7 @@
   },
   "servers": [
     {
-      "url": "https://services.app.dados.rio/app-busca-search"
+      "url": "https://services.staging.app.dados.rio/app-busca-search"
     }
   ],
   "components": {
