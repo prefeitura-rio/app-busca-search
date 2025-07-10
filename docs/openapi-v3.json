@@ -18,14 +18,14 @@
   "paths": {
     "/api/v1/busca-hibrida-multi": {
       "get": {
-        "description": "Realiza uma busca híbrida em várias coleções combinando texto e embeddings",
+        "description": "Realiza uma busca hibrida em varias colecoes combinando texto e embeddings",
         "tags": [
           "busca"
         ],
-        "summary": "Busca híbrida em várias coleções",
+        "summary": "Busca hibrida em varias colecoes",
         "parameters": [
           {
-            "description": "Lista de coleções separadas por vírgula",
+            "description": "Lista de colecoes separadas por virgula",
             "name": "collections",
             "in": "query",
             "required": true,
@@ -43,7 +43,7 @@
             }
           },
           {
-            "description": "Página",
+            "description": "Pagina",
             "name": "page",
             "in": "query",
             "schema": {
@@ -52,7 +52,7 @@
             }
           },
           {
-            "description": "Resultados por página",
+            "description": "Resultados por pagina",
             "name": "per_page",
             "in": "query",
             "schema": {
@@ -109,14 +109,14 @@
     },
     "/api/v1/categoria/{collections}": {
       "get": {
-        "description": "Busca documentos de uma categoria específica em uma ou múltiplas coleções retornando informações completas",
+        "description": "Busca documentos de uma categoria especifica em uma ou multiplas colecoes retornando informacoes completas",
         "tags": [
           "busca"
         ],
         "summary": "Busca documentos por categoria",
         "parameters": [
           {
-            "description": "Nome da coleção ou lista de coleções separadas por vírgula",
+            "description": "Nome da colecao ou lista de colecoes separadas por virgula",
             "name": "collections",
             "in": "path",
             "required": true,
@@ -134,7 +134,7 @@
             }
           },
           {
-            "description": "Página",
+            "description": "Pagina",
             "name": "page",
             "in": "query",
             "schema": {
@@ -143,7 +143,7 @@
             }
           },
           {
-            "description": "Resultados por página",
+            "description": "Resultados por pagina",
             "name": "per_page",
             "in": "query",
             "schema": {
@@ -200,14 +200,14 @@
     },
     "/api/v1/categorias-relevancia": {
       "get": {
-        "description": "Retorna todas as categorias ordenadas por relevância baseada na volumetria dos serviços",
+        "description": "Retorna todas as categorias ordenadas por relevancia baseada na volumetria dos servicos",
         "tags": [
           "busca"
         ],
-        "summary": "Busca categorias ordenadas por relevância",
+        "summary": "Busca categorias ordenadas por relevancia",
         "parameters": [
           {
-            "description": "Lista de coleções separadas por vírgula",
+            "description": "Lista de colecoes separadas por virgula",
             "name": "collections",
             "in": "query",
             "required": true,
@@ -264,14 +264,14 @@
     },
     "/api/v1/documento/{collection}/{id}": {
       "get": {
-        "description": "Busca um documento específico por ID retornando todos os campos exceto embedding e campos normalizados",
+        "description": "Busca um documento especifico por ID retornando todos os campos exceto embedding e campos normalizados",
         "tags": [
           "busca"
         ],
         "summary": "Busca documento por ID",
         "parameters": [
           {
-            "description": "Nome da coleção",
+            "description": "Nome da colecao",
             "name": "collection",
             "in": "path",
             "required": true,
