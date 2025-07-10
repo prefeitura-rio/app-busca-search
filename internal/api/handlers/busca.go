@@ -24,15 +24,15 @@ func NewBuscaHandler(client *typesense.Client) *BuscaHandler {
 }
 
 // BuscaMultiColecao godoc
-// @Summary Busca híbrida em várias coleções
-// @Description Realiza uma busca híbrida em várias coleções combinando texto e embeddings
+// @Summary Busca hibrida em varias colecoes
+// @Description Realiza uma busca hibrida em varias colecoes combinando texto e embeddings
 // @Tags busca
 // @Accept json
 // @Produce json
-// @Param collections query string true "Lista de coleções separadas por vírgula"
+// @Param collections query string true "Lista de colecoes separadas por virgula"
 // @Param q query string true "Termo de busca"
-// @Param page query int false "Página" default(1)
-// @Param per_page query int false "Resultados por página" default(10)
+// @Param page query int false "Pagina" default(1)
+// @Param per_page query int false "Resultados por pagina" default(10)
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -76,14 +76,14 @@ func (h *BuscaHandler) BuscaMultiColecao(c *gin.Context) {
 
 // BuscaPorCategoria godoc
 // @Summary Busca documentos por categoria
-// @Description Busca documentos de uma categoria específica em uma ou múltiplas coleções retornando informações completas
+// @Description Busca documentos de uma categoria especifica em uma ou multiplas colecoes retornando informacoes completas
 // @Tags busca
 // @Accept json
 // @Produce json
-// @Param collections path string true "Nome da coleção ou lista de coleções separadas por vírgula"
+// @Param collections path string true "Nome da colecao ou lista de colecoes separadas por virgula"
 // @Param categoria query string true "Categoria dos documentos"
-// @Param page query int false "Página" default(1)
-// @Param per_page query int false "Resultados por página" default(10)
+// @Param page query int false "Pagina" default(1)
+// @Param per_page query int false "Resultados por pagina" default(10)
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -137,11 +137,11 @@ func (h *BuscaHandler) BuscaPorCategoria(c *gin.Context) {
 
 // BuscaPorID godoc
 // @Summary Busca documento por ID
-// @Description Busca um documento específico por ID retornando todos os campos exceto embedding e campos normalizados
+// @Description Busca um documento especifico por ID retornando todos os campos exceto embedding e campos normalizados
 // @Tags busca
 // @Accept json
 // @Produce json
-// @Param collection path string true "Nome da coleção"
+// @Param collection path string true "Nome da colecao"
 // @Param id path string true "ID do documento"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
@@ -175,12 +175,12 @@ func (h *BuscaHandler) BuscaPorID(c *gin.Context) {
 }
 
 // CategoriasRelevancia godoc
-// @Summary Busca categorias ordenadas por relevância
-// @Description Retorna todas as categorias ordenadas por relevância baseada na volumetria dos serviços
+// @Summary Busca categorias ordenadas por relevancia
+// @Description Retorna todas as categorias ordenadas por relevancia baseada na volumetria dos servicos
 // @Tags busca
 // @Accept json
 // @Produce json
-// @Param collections query string true "Lista de coleções separadas por vírgula"
+// @Param collections query string true "Lista de colecoes separadas por virgula"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
