@@ -2,10 +2,11 @@ run:
     go run ./cmd/api
 
 swagger:
-    swag init -g cmd/api/main.go --parseDependency --parseInternal
+    go install github.com/swaggo/swag/cmd/swag@latest
+    $(go env GOPATH)/bin/swag init -g cmd/api/main.go --parseDependency --parseInternal
 
 start:
-    swag init -g cmd/api/main.go --parseDependency --parseInternal
+    $(go env GOPATH)/bin/swag init -g cmd/api/main.go --parseDependency --parseInternal
     go run ./cmd/api
 
 build:
