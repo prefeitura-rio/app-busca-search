@@ -22,6 +22,9 @@ type Config struct {
 	RelevanciaArquivo1746          string
 	RelevanciaArquivoCariocaDigital string
 	RelevanciaIntervaloAtualizacao  int // em minutos
+
+	// Configuração de filtro
+	FilterCSVPath string
 }
 
 func LoadConfig() *Config {
@@ -42,6 +45,9 @@ func LoadConfig() *Config {
 		RelevanciaArquivo1746: getEnv("RELEVANCIA_ARQUIVO_1746", "data/volumetria_1746.csv"),
 		RelevanciaArquivoCariocaDigital: getEnv("RELEVANCIA_ARQUIVO_CARIOCA_DIGITAL", "data/volumetria_carioca_digital.csv"),
 		RelevanciaIntervaloAtualizacao: getEnvInt("RELEVANCIA_INTERVALO_ATUALIZACAO", 60),
+
+		// Configuração de filtro
+		FilterCSVPath: getEnv("FILTER_CSV_PATH", "data/servicos_similares_carioca_1746_20250702_095454.csv"),
 	}
 }
 

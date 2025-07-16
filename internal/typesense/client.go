@@ -24,6 +24,7 @@ type Client struct {
 	geminiClient *genai.Client
 	embeddingModel string
 	relevanciaService *services.RelevanciaService
+	filterService *services.FilterService
 }
 
 func NewClient(cfg *config.Config) *Client {
@@ -51,11 +52,15 @@ func NewClient(cfg *config.Config) *Client {
 	
 	relevanciaService := services.NewRelevanciaService(relevanciaConfig)
 
+	// Inicializa o serviço de filtro
+	filterService := services.NewFilterService(cfg.FilterCSVPath)
+
 	return &Client{
 		client: typesenseClient,
 		geminiClient: geminiClient,
 		embeddingModel: cfg.GeminiEmbeddingModel,
 		relevanciaService: relevanciaService,
+		filterService: filterService,
 	}
 }
 
@@ -187,6 +192,27 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 		}
 		return allHits[i].textMatch > allHits[j].textMatch
 	})
+
+	// Aplica filtro nos resultados ordenados, removendo documentos da carioca-digital que estão no CSV
+	filteredHits := make([]hitWrapper, 0, len(allHits))
+	for _, hw := range allHits {
+		shouldKeep := true
+		
+		// Verifica se é da collection carioca-digital e se deve ser excluído
+		if document, ok := hw.raw["document"].(map[string]interface{}); ok {
+			if id, ok := document["id"].(string); ok {
+				// Para busca multi-collection, assumimos que documentos com IDs no CSV são da carioca-digital
+				if c.filterService.ShouldExclude(id) {
+					shouldKeep = false
+				}
+			}
+		}
+		
+		if shouldKeep {
+			filteredHits = append(filteredHits, hw)
+		}
+	}
+	allHits = filteredHits
 
 	startIdx := (pagina - 1) * porPagina
 	if startIdx < 0 {
@@ -321,6 +347,26 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 		return allHitsWithRelevance[i].relevancia > allHitsWithRelevance[j].relevancia
 	})
 
+	// Aplica filtro nos resultados ordenados, removendo documentos da carioca-digital que estão no CSV
+	filteredHitsWithRelevance := make([]hitWithRelevance, 0, len(allHitsWithRelevance))
+	for _, hitWithRel := range allHitsWithRelevance {
+		shouldKeep := true
+		
+		// Verifica se deve ser excluído
+		if document, ok := hitWithRel.hit["document"].(map[string]interface{}); ok {
+			if id, ok := document["id"].(string); ok {
+				if c.filterService.ShouldExclude(id) {
+					shouldKeep = false
+				}
+			}
+		}
+		
+		if shouldKeep {
+			filteredHitsWithRelevance = append(filteredHitsWithRelevance, hitWithRel)
+		}
+	}
+	allHitsWithRelevance = filteredHitsWithRelevance
+
 	// Paginação manual dos resultados combinados
 	startIdx := (pagina - 1) * porPagina
 	if startIdx < 0 {
@@ -443,6 +489,28 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	sort.Slice(allHitsWithRelevance, func(i, j int) bool {
 		return allHitsWithRelevance[i].relevancia > allHitsWithRelevance[j].relevancia
 	})
+
+	// Aplica filtro nos resultados ordenados se for collection carioca-digital
+	if colecao == "carioca-digital" {
+		filteredHitsWithRelevance := make([]hitWithRelevance, 0, len(allHitsWithRelevance))
+		for _, hitWithRel := range allHitsWithRelevance {
+			shouldKeep := true
+			
+			// Verifica se deve ser excluído
+			if document, ok := hitWithRel.hit["document"].(map[string]interface{}); ok {
+				if id, ok := document["id"].(string); ok {
+					if c.filterService.ShouldExclude(id) {
+						shouldKeep = false
+					}
+				}
+			}
+			
+			if shouldKeep {
+				filteredHitsWithRelevance = append(filteredHitsWithRelevance, hitWithRel)
+			}
+		}
+		allHitsWithRelevance = filteredHitsWithRelevance
+	}
 
 	// Paginação manual dos resultados ordenados
 	startIdx := (pagina - 1) * porPagina
