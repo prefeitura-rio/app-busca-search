@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-busca-search
+  annotations:
+    reloader.stakater.com/auto: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-busca-search
+  template:
+    metadata:
+      labels:
+        app: app-busca-search
+    spec:
+      containers:
+        - name: app-busca-search
+          image: ghcr.io/prefeitura-rio/app-busca-search:stable
+          envFrom:
+            - secretRef:
+                name: busca-secrets
+          # resources:
+          #   requests:
+          #     cpu: 500m
+          #     memory: 2Gi
+          #   limits:
+          #     cpu: 500m
+          #     memory: 2Gi
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: app-busca-search
+  name: app-busca-search
+spec:
+  ports:
+    - name: "8080"
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: app-busca-search
