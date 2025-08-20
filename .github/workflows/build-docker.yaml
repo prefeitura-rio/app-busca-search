@@ -41,12 +41,10 @@ jobs:
 
       - name: Post-process OpenAPI v3 JSON
         run: |
-          if [ "${GITHUB_REF##*/}" == "main" ]; then
-            SERVER_URL="https://services.app.dados.rio/app-busca-search"
-          elif [ "${GITHUB_REF##*/}" == "staging" ]; then
-            SERVER_URL="https://services.staging.app.dados.rio/app-busca-search"
-          fi
-          jq --arg url "$SERVER_URL" '.servers = [{"url": $url}] |
+          jq '.servers = [
+              {"url": "https://services.pref.rio/app-busca-search", "description": "Production server"},
+              {"url": "https://services.staging.app.dados.rio/app-busca-search", "description": "Staging server"}
+            ] |
               .components.securitySchemes = {
                 "bearerAuth": {
                   "type": "http",
