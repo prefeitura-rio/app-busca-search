@@ -104,4 +104,62 @@ type BuscaCategoriaResponse struct {
 	OutOf     int               `json:"out_of"`
 	Page      int               `json:"page"`
 	Documentos []DocumentoResumo `json:"documentos"`
+}
+
+// PrefRioService representa um serviço da collection prefrio_services_base
+type PrefRioService struct {
+	ID                        string   `json:"id,omitempty" typesense:"id,optional"`
+	NomeServico               string   `json:"nome_servico" validate:"required,max=255" typesense:"nome_servico"`
+	OrgaoGestor               []string `json:"orgao_gestor" validate:"required,min=1" typesense:"orgao_gestor"`
+	Resumo                    string   `json:"resumo" validate:"required,max=350" typesense:"resumo"`
+	TempoAtendimento          string   `json:"tempo_atendimento" validate:"required" typesense:"tempo_atendimento"`
+	CustoServico              string   `json:"custo_servico" validate:"required" typesense:"custo_servico"`
+	ResultadoSolicitacao      string   `json:"resultado_solicitacao" validate:"required" typesense:"resultado_solicitacao"`
+	DescricaoCompleta         string   `json:"descricao_completa" validate:"required" typesense:"descricao_completa"`
+	Autor                     string   `json:"autor" validate:"required" typesense:"autor"`
+	DocumentosNecessarios     []string `json:"documentos_necessarios,omitempty" typesense:"documentos_necessarios,optional"`
+	InstrucoesSolicitante     string   `json:"instrucoes_solicitante,omitempty" typesense:"instrucoes_solicitante,optional"`
+	CanaisDigitais            []string `json:"canais_digitais,omitempty" typesense:"canais_digitais,optional"`
+	CanaisPresenciais         []string `json:"canais_presenciais,omitempty" typesense:"canais_presenciais,optional"`
+	ServicoNaoCobre           string   `json:"servico_nao_cobre,omitempty" typesense:"servico_nao_cobre,optional"`
+	LegislacaoRelacionada     []string `json:"legislacao_relacionada,omitempty" typesense:"legislacao_relacionada,optional"`
+	TemaGeral                 string   `json:"tema_geral" validate:"required" typesense:"tema_geral"`
+	PublicoEspecifico         []string `json:"publico_especifico,omitempty" typesense:"publico_especifico,optional"`
+	ObjetivoCidadao           string   `json:"objetivo_cidadao" validate:"required" typesense:"objetivo_cidadao"`
+	FixarDestaque             bool     `json:"fixar_destaque" typesense:"fixar_destaque"`
+	Status                    int      `json:"status" validate:"min=0,max=1" typesense:"status"` // 0=Draft, 1=Published
+	CreatedAt                 int64    `json:"created_at" typesense:"created_at"`
+	UpdatedAt                 int64    `json:"updated_at" typesense:"updated_at"`
+	SearchContent             string   `json:"search_content" typesense:"search_content"`
+	Embedding                 []float64 `json:"embedding,omitempty" typesense:"embedding,optional"`
+}
+
+// PrefRioServiceRequest representa os dados de entrada para criar/atualizar um serviço
+type PrefRioServiceRequest struct {
+	NomeServico               string   `json:"nome_servico" validate:"required,max=255"`
+	OrgaoGestor               []string `json:"orgao_gestor" validate:"required,min=1"`
+	Resumo                    string   `json:"resumo" validate:"required,max=350"`
+	TempoAtendimento          string   `json:"tempo_atendimento" validate:"required"`
+	CustoServico              string   `json:"custo_servico" validate:"required"`
+	ResultadoSolicitacao      string   `json:"resultado_solicitacao" validate:"required"`
+	DescricaoCompleta         string   `json:"descricao_completa" validate:"required"`
+	DocumentosNecessarios     []string `json:"documentos_necessarios,omitempty"`
+	InstrucoesSolicitante     string   `json:"instrucoes_solicitante,omitempty"`
+	CanaisDigitais            []string `json:"canais_digitais,omitempty"`
+	CanaisPresenciais         []string `json:"canais_presenciais,omitempty"`
+	ServicoNaoCobre           string   `json:"servico_nao_cobre,omitempty"`
+	LegislacaoRelacionada     []string `json:"legislacao_relacionada,omitempty"`
+	TemaGeral                 string   `json:"tema_geral" validate:"required"`
+	PublicoEspecifico         []string `json:"publico_especifico,omitempty"`
+	ObjetivoCidadao           string   `json:"objetivo_cidadao" validate:"required"`
+	FixarDestaque             bool     `json:"fixar_destaque"`
+	Status                    int      `json:"status" validate:"min=0,max=1"`
+}
+
+// PrefRioServiceResponse representa a resposta de listagem de serviços
+type PrefRioServiceResponse struct {
+	Found     int              `json:"found"`
+	OutOf     int              `json:"out_of"`
+	Page      int              `json:"page"`
+	Services  []PrefRioService `json:"services"`
 } 
