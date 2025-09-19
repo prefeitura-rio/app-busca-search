@@ -65,6 +65,30 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Filtrar por aguardando aprovação",
+            "name": "awaiting_approval",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Campo para filtro dinâmico",
+            "name": "field",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Valor para filtro dinâmico (usado com field)",
+            "name": "value",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -112,7 +136,7 @@
         ]
       },
       "post": {
-        "description": "Cria um novo serviço na collection prefrio_services_base. Apenas GERAL e ADMIN podem criar.",
+        "description": "Cria um novo serviço na collection prefrio_services_base",
         "tags": [
           "admin"
         ],
@@ -152,8 +176,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -262,7 +286,7 @@
         ]
       },
       "put": {
-        "description": "Atualiza um serviço existente. EDITOR pode atualizar, GERAL e ADMIN podem atualizar e publicar.",
+        "description": "Atualiza um serviço existente",
         "tags": [
           "admin"
         ],
@@ -313,8 +337,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -360,7 +384,7 @@
         ]
       },
       "delete": {
-        "description": "Deleta um serviço. Apenas GERAL e ADMIN podem deletar.",
+        "description": "Deleta um serviço",
         "tags": [
           "admin"
         ],
@@ -393,8 +417,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -442,7 +466,7 @@
     },
     "/api/v1/admin/services/{id}/publish": {
       "patch": {
-        "description": "Publica um serviço alterando seu status para 1. Apenas GERAL e ADMIN podem publicar.",
+        "description": "Publica um serviço alterando seu status para 1",
         "tags": [
           "admin"
         ],
@@ -482,8 +506,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -531,7 +555,7 @@
     },
     "/api/v1/admin/services/{id}/unpublish": {
       "patch": {
-        "description": "Despublica um serviço alterando seu status para 0. Apenas GERAL e ADMIN podem despublicar.",
+        "description": "Despublica um serviço alterando seu status para 0",
         "tags": [
           "admin"
         ],
@@ -571,8 +595,8 @@
               }
             }
           },
-          "403": {
-            "description": "Forbidden",
+          "401": {
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -963,6 +987,17 @@
   ],
   "components": {
     "schemas": {
+      "models.AgentsConfig": {
+        "type": "object",
+        "properties": {
+          "exclusive_for_agents": {
+            "type": "boolean"
+          },
+          "tool_hint": {
+            "type": "string"
+          }
+        }
+      },
       "models.PrefRioService": {
         "type": "object",
         "required": [
@@ -970,7 +1005,6 @@
           "custo_servico",
           "descricao_completa",
           "nome_servico",
-          "objetivo_cidadao",
           "orgao_gestor",
           "resultado_solicitacao",
           "resumo",
@@ -978,8 +1012,14 @@
           "tempo_atendimento"
         ],
         "properties": {
+          "agents": {
+            "$ref": "#/components/schemas/models.AgentsConfig"
+          },
           "autor": {
             "type": "string"
+          },
+          "awaiting_approval": {
+            "type": "boolean"
           },
           "canais_digitais": {
             "type": "array",
@@ -1014,6 +1054,10 @@
               "type": "number"
             }
           },
+          "extra_fields": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "fixar_destaque": {
             "type": "boolean"
           },
@@ -1022,6 +1066,9 @@
           },
           "instrucoes_solicitante": {
             "type": "string"
+          },
+          "last_update": {
+            "type": "integer"
           },
           "legislacao_relacionada": {
             "type": "array",
@@ -1032,9 +1079,6 @@
           "nome_servico": {
             "type": "string",
             "maxLength": 255
-          },
-          "objetivo_cidadao": {
-            "type": "string"
           },
           "orgao_gestor": {
             "type": "array",
@@ -1073,9 +1117,6 @@
           },
           "tempo_atendimento": {
             "type": "string"
-          },
-          "updated_at": {
-            "type": "integer"
           }
         }
       },
@@ -1085,7 +1126,6 @@
           "custo_servico",
           "descricao_completa",
           "nome_servico",
-          "objetivo_cidadao",
           "orgao_gestor",
           "resultado_solicitacao",
           "resumo",
@@ -1093,6 +1133,12 @@
           "tempo_atendimento"
         ],
         "properties": {
+          "agents": {
+            "$ref": "#/components/schemas/models.AgentsConfig"
+          },
+          "awaiting_approval": {
+            "type": "boolean"
+          },
           "canais_digitais": {
             "type": "array",
             "items": {
@@ -1117,6 +1163,10 @@
               "type": "string"
             }
           },
+          "extra_fields": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "fixar_destaque": {
             "type": "boolean"
           },
@@ -1132,9 +1182,6 @@
           "nome_servico": {
             "type": "string",
             "maxLength": 255
-          },
-          "objetivo_cidadao": {
-            "type": "string"
           },
           "orgao_gestor": {
             "type": "array",
