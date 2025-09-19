@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prefeitura-rio/app-busca-search/internal/api/handlers"
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
-	"github.com/prefeitura-rio/app-busca-search/internal/middleware"
+	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -28,33 +28,33 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		api.GET("/categorias-relevancia", buscaHandler.CategoriasRelevancia)
 	}
 
-	// Rotas administrativas com autenticação e autorização
+	// Rotas administrativas com autenticação JWT (sem validação de roles)
 	admin := api.Group("/admin")
-	admin.Use(middlewares.ExtractUserContext())
-	admin.Use(middlewares.RequireAuthentication())
+	admin.Use(middlewares.JWTAuthMiddleware()) // Extrai dados do JWT
+	admin.Use(middlewares.RequireJWTAuth())    // Verifica apenas se está autenticado
 	{
 		services := admin.Group("/services")
 		{
-			// Criar serviço: apenas GERAL e ADMIN
-			services.POST("", middlewares.RequireRole("GERAL", "ADMIN"), adminHandler.CreateService)
+			// Criar serviço
+			services.POST("", adminHandler.CreateService)
 			
-			// Listar serviços: todos os roles autenticados
+			// Listar serviços
 			services.GET("", adminHandler.ListServices)
 			
-			// Buscar serviço por ID: todos os roles autenticados
+			// Buscar serviço por ID
 			services.GET("/:id", adminHandler.GetService)
 			
-			// Atualizar serviço: EDITOR, GERAL e ADMIN
-			services.PUT("/:id", middlewares.RequireRole("EDITOR", "GERAL", "ADMIN"), adminHandler.UpdateService)
+			// Atualizar serviço
+			services.PUT("/:id", adminHandler.UpdateService)
 			
-			// Deletar serviço: apenas GERAL e ADMIN
-			services.DELETE("/:id", middlewares.RequireRole("GERAL", "ADMIN"), adminHandler.DeleteService)
+			// Deletar serviço
+			services.DELETE("/:id", adminHandler.DeleteService)
 			
-			// Publicar serviço: apenas GERAL e ADMIN
-			services.PATCH("/:id/publish", middlewares.RequireRole("GERAL", "ADMIN"), adminHandler.PublishService)
+			// Publicar serviço
+			services.PATCH("/:id/publish", adminHandler.PublishService)
 			
-			// Despublicar serviço: apenas GERAL e ADMIN
-			services.PATCH("/:id/unpublish", middlewares.RequireRole("GERAL", "ADMIN"), adminHandler.UnpublishService)
+			// Despublicar serviço
+			services.PATCH("/:id/unpublish", adminHandler.UnpublishService)
 		}
 	}
 

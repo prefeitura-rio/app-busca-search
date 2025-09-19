@@ -880,7 +880,7 @@ func (c *Client) CreatePrefRioService(ctx context.Context, service *models.PrefR
 	// Define timestamps
 	now := time.Now().Unix()
 	service.CreatedAt = now
-	service.UpdatedAt = now
+	service.LastUpdate = now
 	
 	// Gera o search_content combinando campos relevantes
 	service.SearchContent = c.generateSearchContent(service)
@@ -942,7 +942,7 @@ func (c *Client) UpdatePrefRioService(ctx context.Context, id string, service *m
 	
 	// Define o ID e atualiza o timestamp
 	service.ID = id
-	service.UpdatedAt = time.Now().Unix()
+	service.LastUpdate = time.Now().Unix()
 	
 	// Gera o search_content combinando campos relevantes
 	service.SearchContent = c.generateSearchContent(service)
@@ -1041,7 +1041,9 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 			switch v := value.(type) {
 			case string:
 				if v != "" {
-					filterParts = append(filterParts, fmt.Sprintf("%s:=%s", key, v))
+					// Normaliza strings para melhor busca
+					normalizedValue := utils.NormalizarCategoria(v)
+					filterParts = append(filterParts, fmt.Sprintf("%s:=%s", key, normalizedValue))
 				}
 			case int:
 				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
@@ -1061,7 +1063,7 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 		PerPage:       intPtr(perPage),
 		IncludeFields: stringPtr("*"),
 		ExcludeFields: stringPtr("embedding"),
-		SortBy:        stringPtr("updated_at:desc"),
+		SortBy:        stringPtr("last_update:desc"),
 	}
 	
 	if filterBy != "" {
@@ -1134,9 +1136,6 @@ func (c *Client) generateSearchContent(service *models.PrefRioService) string {
 	}
 	if service.TemaGeral != "" {
 		content = append(content, service.TemaGeral)
-	}
-	if service.ObjetivoCidadao != "" {
-		content = append(content, service.ObjetivoCidadao)
 	}
 	
 	// Adiciona órgãos gestores

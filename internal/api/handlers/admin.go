@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/prefeitura-rio/app-busca-search/internal/middleware"
+	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 )
@@ -26,14 +26,14 @@ func NewAdminHandler(client *typesense.Client) *AdminHandler {
 
 // CreateService godoc
 // @Summary Cria um novo serviço
-// @Description Cria um novo serviço na collection prefrio_services_base. Apenas GERAL e ADMIN podem criar.
+// @Description Cria um novo serviço na collection prefrio_services_base
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param service body models.PrefRioServiceRequest true "Dados do serviço"
 // @Success 201 {object} models.PrefRioService
 // @Failure 400 {object} map[string]string
-// @Failure 403 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/admin/services [post]
 func (h *AdminHandler) CreateService(c *gin.Context) {
@@ -67,8 +67,10 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		LegislacaoRelacionada:     request.LegislacaoRelacionada,
 		TemaGeral:                 request.TemaGeral,
 		PublicoEspecifico:         request.PublicoEspecifico,
-		ObjetivoCidadao:           request.ObjetivoCidadao,
 		FixarDestaque:             request.FixarDestaque,
+		AwaitingApproval:          request.AwaitingApproval,
+		Agents:                    request.Agents,
+		ExtraFields:               request.ExtraFields,
 		Status:                    request.Status,
 	}
 
@@ -85,7 +87,7 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 
 // UpdateService godoc
 // @Summary Atualiza um serviço existente
-// @Description Atualiza um serviço existente. EDITOR pode atualizar, GERAL e ADMIN podem atualizar e publicar.
+// @Description Atualiza um serviço existente
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -93,7 +95,7 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 // @Param service body models.PrefRioServiceRequest true "Dados atualizados do serviço"
 // @Success 200 {object} models.PrefRioService
 // @Failure 400 {object} map[string]string
-// @Failure 403 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/admin/services/{id} [put]
@@ -116,14 +118,7 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		return
 	}
 
-	// Verifica permissões específicas para status
-	userRole := middlewares.GetUserRole(c)
-	if request.Status == 1 { // Publicar
-		if userRole != "GERAL" && userRole != "ADMIN" {
-			c.JSON(http.StatusForbidden, gin.H{"error": "Apenas GERAL e ADMIN podem publicar serviços"})
-			return
-		}
-	}
+	// Nota: Validação de permissões será feita externamente à API
 
 	// Busca o serviço existente para preservar created_at
 	ctx := context.Background()
@@ -152,8 +147,10 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		LegislacaoRelacionada:     request.LegislacaoRelacionada,
 		TemaGeral:                 request.TemaGeral,
 		PublicoEspecifico:         request.PublicoEspecifico,
-		ObjetivoCidadao:           request.ObjetivoCidadao,
 		FixarDestaque:             request.FixarDestaque,
+		AwaitingApproval:          request.AwaitingApproval,
+		Agents:                    request.Agents,
+		ExtraFields:               request.ExtraFields,
 		Status:                    request.Status,
 		CreatedAt:                 existingService.CreatedAt, // Preserva data de criação
 	}
@@ -170,14 +167,14 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 
 // DeleteService godoc
 // @Summary Deleta um serviço
-// @Description Deleta um serviço. Apenas GERAL e ADMIN podem deletar.
+// @Description Deleta um serviço
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param id path string true "ID do serviço"
 // @Success 204
 // @Failure 400 {object} map[string]string
-// @Failure 403 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/admin/services/{id} [delete]
@@ -244,6 +241,9 @@ func (h *AdminHandler) GetService(c *gin.Context) {
 // @Param status query int false "Status do serviço (0=Draft, 1=Published)"
 // @Param author query string false "Filtrar por autor"
 // @Param tema_geral query string false "Filtrar por tema geral"
+// @Param awaiting_approval query bool false "Filtrar por aguardando aprovação"
+// @Param field query string false "Campo para filtro dinâmico"
+// @Param value query string false "Valor para filtro dinâmico (usado com field)"
 // @Success 200 {object} models.PrefRioServiceResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -262,19 +262,32 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 
 	// Parse de filtros
 	filters := make(map[string]interface{})
-	
+
 	if status := c.Query("status"); status != "" {
 		if statusInt, err := strconv.Atoi(status); err == nil && (statusInt == 0 || statusInt == 1) {
 			filters["status"] = statusInt
 		}
 	}
-	
+
 	if author := c.Query("author"); author != "" {
 		filters["autor"] = author
 	}
-	
+
 	if tema := c.Query("tema_geral"); tema != "" {
 		filters["tema_geral"] = tema
+	}
+
+	if awaitingApproval := c.Query("awaiting_approval"); awaitingApproval != "" {
+		if approvalBool, err := strconv.ParseBool(awaitingApproval); err == nil {
+			filters["awaiting_approval"] = approvalBool
+		}
+	}
+
+	// Filtro dinâmico por campo e valor
+	if field := c.Query("field"); field != "" {
+		if value := c.Query("value"); value != "" {
+			filters[field] = value
+		}
 	}
 
 	// Lista os serviços
@@ -290,14 +303,14 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 
 // PublishService godoc
 // @Summary Publica um serviço (altera status para 1)
-// @Description Publica um serviço alterando seu status para 1. Apenas GERAL e ADMIN podem publicar.
+// @Description Publica um serviço alterando seu status para 1
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param id path string true "ID do serviço"
 // @Success 200 {object} models.PrefRioService
 // @Failure 400 {object} map[string]string
-// @Failure 403 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/admin/services/{id}/publish [patch]
@@ -331,14 +344,14 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 
 // UnpublishService godoc
 // @Summary Despublica um serviço (altera status para 0)
-// @Description Despublica um serviço alterando seu status para 0. Apenas GERAL e ADMIN podem despublicar.
+// @Description Despublica um serviço alterando seu status para 0
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param id path string true "ID do serviço"
 // @Success 200 {object} models.PrefRioService
 // @Failure 400 {object} map[string]string
-// @Failure 403 {object} map[string]string
+// @Failure 401 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/admin/services/{id}/unpublish [patch]
