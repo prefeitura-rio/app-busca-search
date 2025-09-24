@@ -860,7 +860,8 @@ func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 			{Name: "search_content", Type: "string", Facet: boolPtr(false)},
 			{Name: "embedding", Type: "float[]", Facet: boolPtr(false), Optional: boolPtr(true), NumDim: intPtr(768)},
 		},
-		DefaultSortingField: stringPtr("last_update"),
+		DefaultSortingField:  stringPtr("last_update"),
+		EnableNestedFields:   boolPtr(true),
 	}
 	
 	_, err := c.client.Collections().Create(ctx, schema)
