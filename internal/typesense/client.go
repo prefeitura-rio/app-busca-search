@@ -848,15 +848,19 @@ func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 			{Name: "legislacao_relacionada", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
 			{Name: "tema_geral", Type: "string", Facet: boolPtr(true)},
 			{Name: "publico_especifico", Type: "string[]", Facet: boolPtr(true), Optional: boolPtr(true)},
-			{Name: "objetivo_cidadao", Type: "string", Facet: boolPtr(true)},
 			{Name: "fixar_destaque", Type: "bool", Facet: boolPtr(true)},
+			{Name: "awaiting_approval", Type: "bool", Facet: boolPtr(true)},
+			{Name: "published_at", Type: "int64", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "is_free", Type: "bool", Facet: boolPtr(true), Optional: boolPtr(true)},
+			{Name: "agents", Type: "object", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "extra_fields", Type: "object", Facet: boolPtr(false), Optional: boolPtr(true)},
 			{Name: "status", Type: "int32", Facet: boolPtr(true)},
 			{Name: "created_at", Type: "int64", Facet: boolPtr(false)},
-			{Name: "updated_at", Type: "int64", Facet: boolPtr(false)},
+			{Name: "last_update", Type: "int64", Facet: boolPtr(false)},
 			{Name: "search_content", Type: "string", Facet: boolPtr(false)},
 			{Name: "embedding", Type: "float[]", Facet: boolPtr(false), Optional: boolPtr(true), NumDim: intPtr(768)},
 		},
-		DefaultSortingField: stringPtr("updated_at"),
+		DefaultSortingField: stringPtr("last_update"),
 	}
 	
 	_, err := c.client.Collections().Create(ctx, schema)
