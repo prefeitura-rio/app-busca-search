@@ -133,6 +133,8 @@ type PrefRioService struct {
 	PublicoEspecifico         []string               `json:"publico_especifico,omitempty" typesense:"publico_especifico,optional"`
 	FixarDestaque             bool                   `json:"fixar_destaque" typesense:"fixar_destaque"`
 	AwaitingApproval          bool                   `json:"awaiting_approval" typesense:"awaiting_approval"`
+	PublishedAt               *int64                 `json:"published_at,omitempty" typesense:"published_at,optional"`
+	IsFree                    *bool                  `json:"is_free,omitempty" typesense:"is_free,optional"`
 	Agents                    *AgentsConfig          `json:"agents,omitempty" typesense:"agents,optional"`
 	ExtraFields               map[string]interface{} `json:"extra_fields,omitempty" typesense:"extra_fields,optional"`
 	Status                    int                    `json:"status" validate:"min=0,max=1" typesense:"status"` // 0=Draft, 1=Published
@@ -161,6 +163,8 @@ type PrefRioServiceRequest struct {
 	PublicoEspecifico         []string               `json:"publico_especifico,omitempty"`
 	FixarDestaque             bool                   `json:"fixar_destaque"`
 	AwaitingApproval          bool                   `json:"awaiting_approval"`
+	PublishedAt               *int64                 `json:"published_at,omitempty"`
+	IsFree                    *bool                  `json:"is_free,omitempty"`
 	Agents                    *AgentsConfig          `json:"agents,omitempty"`
 	ExtraFields               map[string]interface{} `json:"extra_fields,omitempty"`
 	Status                    int                    `json:"status" validate:"min=0,max=1"`

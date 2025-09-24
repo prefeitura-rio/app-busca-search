@@ -69,6 +69,8 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		PublicoEspecifico:         request.PublicoEspecifico,
 		FixarDestaque:             request.FixarDestaque,
 		AwaitingApproval:          request.AwaitingApproval,
+		PublishedAt:               request.PublishedAt,
+		IsFree:                    request.IsFree,
 		Agents:                    request.Agents,
 		ExtraFields:               request.ExtraFields,
 		Status:                    request.Status,
@@ -149,6 +151,8 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		PublicoEspecifico:         request.PublicoEspecifico,
 		FixarDestaque:             request.FixarDestaque,
 		AwaitingApproval:          request.AwaitingApproval,
+		PublishedAt:               request.PublishedAt,
+		IsFree:                    request.IsFree,
 		Agents:                    request.Agents,
 		ExtraFields:               request.ExtraFields,
 		Status:                    request.Status,
@@ -242,6 +246,8 @@ func (h *AdminHandler) GetService(c *gin.Context) {
 // @Param author query string false "Filtrar por autor"
 // @Param tema_geral query string false "Filtrar por tema geral"
 // @Param awaiting_approval query bool false "Filtrar por aguardando aprovação"
+// @Param is_free query bool false "Filtrar por serviços gratuitos"
+// @Param published_at query int false "Filtrar por data de publicação (timestamp)"
 // @Param field query string false "Campo para filtro dinâmico"
 // @Param value query string false "Valor para filtro dinâmico (usado com field)"
 // @Success 200 {object} models.PrefRioServiceResponse
@@ -280,6 +286,18 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 	if awaitingApproval := c.Query("awaiting_approval"); awaitingApproval != "" {
 		if approvalBool, err := strconv.ParseBool(awaitingApproval); err == nil {
 			filters["awaiting_approval"] = approvalBool
+		}
+	}
+
+	if isFree := c.Query("is_free"); isFree != "" {
+		if freeBool, err := strconv.ParseBool(isFree); err == nil {
+			filters["is_free"] = freeBool
+		}
+	}
+
+	if publishedAt := c.Query("published_at"); publishedAt != "" {
+		if publishedAtInt, err := strconv.ParseInt(publishedAt, 10, 64); err == nil {
+			filters["published_at"] = publishedAtInt
 		}
 	}
 

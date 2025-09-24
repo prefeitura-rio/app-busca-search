@@ -1047,6 +1047,8 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 				}
 			case int:
 				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
+			case int64:
+				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
 			case bool:
 				filterParts = append(filterParts, fmt.Sprintf("%s:=%t", key, v))
 			}
