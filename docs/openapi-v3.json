@@ -75,6 +75,22 @@
             }
           },
           {
+            "description": "Filtrar por serviços gratuitos",
+            "name": "is_free",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Filtrar por data de publicação (timestamp)",
+            "name": "published_at",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
             "description": "Campo para filtro dinâmico",
             "name": "field",
             "in": "query",
@@ -1067,6 +1083,9 @@
           "instrucoes_solicitante": {
             "type": "string"
           },
+          "is_free": {
+            "type": "boolean"
+          },
           "last_update": {
             "type": "integer"
           },
@@ -1092,6 +1111,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "published_at": {
+            "type": "integer"
           },
           "resultado_solicitacao": {
             "type": "string"
@@ -1173,6 +1195,9 @@
           "instrucoes_solicitante": {
             "type": "string"
           },
+          "is_free": {
+            "type": "boolean"
+          },
           "legislacao_relacionada": {
             "type": "array",
             "items": {
@@ -1195,6 +1220,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "published_at": {
+            "type": "integer"
           },
           "resultado_solicitacao": {
             "type": "string"
