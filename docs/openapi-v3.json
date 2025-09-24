@@ -482,11 +482,11 @@
     },
     "/api/v1/admin/services/{id}/publish": {
       "patch": {
-        "description": "Publica um serviço alterando seu status para 1",
+        "description": "Publica um serviço alterando seu status para 1 e awaiting_approval para false",
         "tags": [
           "admin"
         ],
-        "summary": "Publica um serviço (altera status para 1)",
+        "summary": "Publica um serviço (altera status para 1 e marca como aprovado)",
         "parameters": [
           {
             "description": "ID do serviço",
@@ -571,11 +571,11 @@
     },
     "/api/v1/admin/services/{id}/unpublish": {
       "patch": {
-        "description": "Despublica um serviço alterando seu status para 0",
+        "description": "Despublica um serviço alterando seu status para 0 e awaiting_approval para true",
         "tags": [
           "admin"
         ],
-        "summary": "Despublica um serviço (altera status para 0)",
+        "summary": "Despublica um serviço (altera status para 0 e marca como aguardando aprovação)",
         "parameters": [
           {
             "description": "ID do serviço",
