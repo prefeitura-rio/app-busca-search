@@ -3,6 +3,7 @@ package middlewares
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -66,7 +67,7 @@ func parseJWTClaims(tokenString string) (*JWTClaims, error) {
 	// JWT tem 3 partes: header.payload.signature
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
-		return nil, gin.Error{Err: gin.Error{}, Type: gin.ErrorTypePublic}
+		return nil, fmt.Errorf("invalid JWT format: expected 3 parts, got %d", len(parts))
 	}
 
 	// Decodifica o payload (parte do meio)
