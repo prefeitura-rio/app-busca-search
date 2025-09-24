@@ -320,8 +320,8 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 }
 
 // PublishService godoc
-// @Summary Publica um serviço (altera status para 1)
-// @Description Publica um serviço alterando seu status para 1
+// @Summary Publica um serviço (altera status para 1 e marca como aprovado)
+// @Description Publica um serviço alterando seu status para 1 e awaiting_approval para false
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -347,8 +347,9 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 		return
 	}
 
-	// Atualiza apenas o status para publicado
+	// Atualiza status para publicado e marca como aprovado
 	service.Status = 1
+	service.AwaitingApproval = false
 	
 	// Atualiza o serviço
 	updatedService, err := h.typesenseClient.UpdatePrefRioService(ctx, serviceID, service)
@@ -361,8 +362,8 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 }
 
 // UnpublishService godoc
-// @Summary Despublica um serviço (altera status para 0)
-// @Description Despublica um serviço alterando seu status para 0
+// @Summary Despublica um serviço (altera status para 0 e marca como aguardando aprovação)
+// @Description Despublica um serviço alterando seu status para 0 e awaiting_approval para true
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -388,8 +389,9 @@ func (h *AdminHandler) UnpublishService(c *gin.Context) {
 		return
 	}
 
-	// Atualiza apenas o status para rascunho
+	// Atualiza status para rascunho e marca como aguardando aprovação
 	service.Status = 0
+	service.AwaitingApproval = true
 	
 	// Atualiza o serviço
 	updatedService, err := h.typesenseClient.UpdatePrefRioService(ctx, serviceID, service)
