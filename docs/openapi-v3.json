@@ -16,6 +16,656 @@
     "version": "1.0"
   },
   "paths": {
+    "/api/v1/admin/services": {
+      "get": {
+        "description": "Lista serviços com paginação e filtros opcionais",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Lista serviços com paginação e filtros",
+        "parameters": [
+          {
+            "description": "Página",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "description": "Resultados por página",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "description": "Status do serviço (0=Draft, 1=Published)",
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filtrar por autor",
+            "name": "author",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por tema geral",
+            "name": "tema_geral",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por aguardando aprovação",
+            "name": "awaiting_approval",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Filtrar por serviços gratuitos",
+            "name": "is_free",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Filtrar por data de publicação (timestamp)",
+            "name": "published_at",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filtrar por nome do serviço",
+            "name": "nome_servico",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Campo para filtro dinâmico",
+            "name": "field",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Valor para filtro dinâmico (usado com field)",
+            "name": "value",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioServiceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "description": "Cria um novo serviço na collection prefrio_services_base",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Cria um novo serviço",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.PrefRioServiceRequest"
+              }
+            }
+          },
+          "description": "Dados do serviço",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/services/{id}": {
+      "get": {
+        "description": "Busca um serviço específico por ID",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Busca um serviço por ID",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "description": "Atualiza um serviço existente",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Atualiza um serviço existente",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.PrefRioServiceRequest"
+              }
+            }
+          },
+          "description": "Dados atualizados do serviço",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "description": "Deleta um serviço",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Deleta um serviço",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/services/{id}/publish": {
+      "patch": {
+        "description": "Publica um serviço alterando seu status para 1 e awaiting_approval para false",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Publica um serviço (altera status para 1 e marca como aprovado)",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/services/{id}/unpublish": {
+      "patch": {
+        "description": "Despublica um serviço alterando seu status para 0 e awaiting_approval para true",
+        "tags": [
+          "admin"
+        ],
+        "summary": "Despublica um serviço (altera status para 0 e marca como aguardando aprovação)",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/busca-hibrida-multi": {
       "get": {
         "description": "Realiza uma busca hibrida em varias colecoes combinando texto e embeddings",
@@ -360,6 +1010,270 @@
     }
   ],
   "components": {
+    "schemas": {
+      "models.AgentsConfig": {
+        "type": "object",
+        "properties": {
+          "exclusive_for_agents": {
+            "type": "boolean"
+          },
+          "tool_hint": {
+            "type": "string"
+          }
+        }
+      },
+      "models.PrefRioService": {
+        "type": "object",
+        "required": [
+          "autor",
+          "custo_servico",
+          "descricao_completa",
+          "nome_servico",
+          "orgao_gestor",
+          "resultado_solicitacao",
+          "resumo",
+          "tema_geral",
+          "tempo_atendimento"
+        ],
+        "properties": {
+          "agents": {
+            "$ref": "#/components/schemas/models.AgentsConfig"
+          },
+          "autor": {
+            "type": "string"
+          },
+          "awaiting_approval": {
+            "type": "boolean"
+          },
+          "canais_digitais": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "canais_presenciais": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "custo_servico": {
+            "type": "string"
+          },
+          "descricao_completa": {
+            "type": "string"
+          },
+          "documentos_necessarios": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "embedding": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "extra_fields": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "fixar_destaque": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instrucoes_solicitante": {
+            "type": "string"
+          },
+          "is_free": {
+            "type": "boolean"
+          },
+          "last_update": {
+            "type": "integer"
+          },
+          "legislacao_relacionada": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nome_servico": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "orgao_gestor": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "publico_especifico": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "published_at": {
+            "type": "integer"
+          },
+          "resultado_solicitacao": {
+            "type": "string"
+          },
+          "resumo": {
+            "type": "string",
+            "maxLength": 350
+          },
+          "search_content": {
+            "type": "string"
+          },
+          "servico_nao_cobre": {
+            "type": "string"
+          },
+          "status": {
+            "description": "0=Draft, 1=Published",
+            "type": "integer",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "tema_geral": {
+            "type": "string"
+          },
+          "tempo_atendimento": {
+            "type": "string"
+          }
+        }
+      },
+      "models.PrefRioServiceRequest": {
+        "type": "object",
+        "required": [
+          "nome_servico",
+          "orgao_gestor",
+          "publico_especifico",
+          "resumo",
+          "tema_geral"
+        ],
+        "properties": {
+          "agents": {
+            "$ref": "#/components/schemas/models.AgentsConfig"
+          },
+          "awaiting_approval": {
+            "type": "boolean"
+          },
+          "canais_digitais": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "canais_presenciais": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "custo_servico": {
+            "type": "string"
+          },
+          "descricao_completa": {
+            "type": "string"
+          },
+          "documentos_necessarios": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extra_fields": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "fixar_destaque": {
+            "type": "boolean"
+          },
+          "instrucoes_solicitante": {
+            "type": "string"
+          },
+          "is_free": {
+            "type": "boolean"
+          },
+          "legislacao_relacionada": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nome_servico": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "orgao_gestor": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "publico_especifico": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "published_at": {
+            "type": "integer"
+          },
+          "resultado_solicitacao": {
+            "type": "string"
+          },
+          "resumo": {
+            "type": "string",
+            "maxLength": 350
+          },
+          "servico_nao_cobre": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "maximum": 1,
+            "minimum": 0
+          },
+          "tema_geral": {
+            "type": "string"
+          },
+          "tempo_atendimento": {
+            "type": "string"
+          }
+        }
+      },
+      "models.PrefRioServiceResponse": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "integer"
+          },
+          "out_of": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.PrefRioService"
+            }
+          }
+        }
+      }
+    },
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",

@@ -804,3 +804,394 @@ func stringPtr(s string) *string {
 func intPtr(i int) *int {
 	return &i
 }
+
+// EnsureCollectionExists verifica se a collection existe e a cria se necessário
+func (c *Client) EnsureCollectionExists(collectionName string) error {
+	ctx := context.Background()
+	
+	// Verifica se a collection já existe
+	_, err := c.client.Collection(collectionName).Retrieve(ctx)
+	if err == nil {
+		// Collection já existe
+		return nil
+	}
+	
+	// Se não existe, cria a collection
+	if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+		return c.createPrefRioServicesCollection(collectionName)
+	}
+	
+	return err
+}
+
+// createPrefRioServicesCollection cria a collection prefrio_services_base com o schema apropriado
+func (c *Client) createPrefRioServicesCollection(collectionName string) error {
+	ctx := context.Background()
+	
+	schema := &api.CollectionSchema{
+		Name: collectionName,
+		Fields: []api.Field{
+			{Name: "id", Type: "string", Optional: boolPtr(true)},
+			{Name: "nome_servico", Type: "string", Facet: boolPtr(false)},
+			{Name: "orgao_gestor", Type: "string[]", Facet: boolPtr(true)},
+			{Name: "resumo", Type: "string", Facet: boolPtr(false)},
+			{Name: "tempo_atendimento", Type: "string", Facet: boolPtr(false)},
+			{Name: "custo_servico", Type: "string", Facet: boolPtr(true)},
+			{Name: "resultado_solicitacao", Type: "string", Facet: boolPtr(true)},
+			{Name: "descricao_completa", Type: "string", Facet: boolPtr(false)},
+			{Name: "autor", Type: "string", Facet: boolPtr(true)},
+			{Name: "documentos_necessarios", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "instrucoes_solicitante", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "canais_digitais", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "canais_presenciais", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "servico_nao_cobre", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "legislacao_relacionada", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "tema_geral", Type: "string", Facet: boolPtr(true)},
+			{Name: "publico_especifico", Type: "string[]", Facet: boolPtr(true), Optional: boolPtr(true)},
+			{Name: "fixar_destaque", Type: "bool", Facet: boolPtr(true)},
+			{Name: "awaiting_approval", Type: "bool", Facet: boolPtr(true)},
+			{Name: "published_at", Type: "int64", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "is_free", Type: "bool", Facet: boolPtr(true), Optional: boolPtr(true)},
+			{Name: "agents", Type: "object", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "extra_fields", Type: "object", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "status", Type: "int32", Facet: boolPtr(true)},
+			{Name: "created_at", Type: "int64", Facet: boolPtr(false)},
+			{Name: "last_update", Type: "int64", Facet: boolPtr(false)},
+			{Name: "search_content", Type: "string", Facet: boolPtr(false)},
+			{Name: "embedding", Type: "float[]", Facet: boolPtr(false), Optional: boolPtr(true), NumDim: intPtr(768)},
+		},
+		DefaultSortingField:  stringPtr("last_update"),
+		EnableNestedFields:   boolPtr(true),
+	}
+	
+	_, err := c.client.Collections().Create(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("erro ao criar collection %s: %v", collectionName, err)
+	}
+	
+	log.Printf("Collection %s criada com sucesso", collectionName)
+	return nil
+}
+
+// CreatePrefRioService cria um novo serviço na collection prefrio_services_base
+func (c *Client) CreatePrefRioService(ctx context.Context, service *models.PrefRioService) (*models.PrefRioService, error) {
+	collectionName := "prefrio_services_base"
+	
+	// Garante que a collection existe
+	if err := c.EnsureCollectionExists(collectionName); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+	
+	// Define timestamps
+	now := time.Now().Unix()
+	service.CreatedAt = now
+	service.LastUpdate = now
+	
+	// Gera o search_content combinando campos relevantes
+	service.SearchContent = c.generateSearchContent(service)
+	
+	// Gera embedding se o cliente Gemini estiver disponível
+	if c.geminiClient != nil {
+		embedding, err := c.GerarEmbedding(ctx, service.SearchContent)
+		if err != nil {
+			log.Printf("Aviso: erro ao gerar embedding: %v", err)
+		} else {
+			// Converte []float32 para []float64
+			service.Embedding = make([]float64, len(embedding))
+			for i, v := range embedding {
+				service.Embedding[i] = float64(v)
+			}
+		}
+	}
+	
+	// Converte para map[string]interface{} para inserção
+	serviceMap, err := c.structToMap(service)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter service para map: %v", err)
+	}
+	
+	// Remove o ID se estiver vazio para auto-geração
+	if service.ID == "" {
+		delete(serviceMap, "id")
+	}
+	
+	// Insere o documento
+	result, err := c.client.Collection(collectionName).Documents().Create(ctx, serviceMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar serviço: %v", err)
+	}
+	
+	// Converte o resultado de volta para o struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+	
+	var createdService models.PrefRioService
+	if err := json.Unmarshal(resultBytes, &createdService); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+	
+	return &createdService, nil
+}
+
+// UpdatePrefRioService atualiza um serviço existente na collection prefrio_services_base
+func (c *Client) UpdatePrefRioService(ctx context.Context, id string, service *models.PrefRioService) (*models.PrefRioService, error) {
+	collectionName := "prefrio_services_base"
+	
+	// Verifica se o documento existe
+	_, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("serviço não encontrado: %v", err)
+	}
+	
+	// Define o ID e atualiza o timestamp
+	service.ID = id
+	service.LastUpdate = time.Now().Unix()
+	
+	// Gera o search_content combinando campos relevantes
+	service.SearchContent = c.generateSearchContent(service)
+	
+	// Gera embedding se o cliente Gemini estiver disponível
+	if c.geminiClient != nil {
+		embedding, err := c.GerarEmbedding(ctx, service.SearchContent)
+		if err != nil {
+			log.Printf("Aviso: erro ao gerar embedding: %v", err)
+		} else {
+			// Converte []float32 para []float64
+			service.Embedding = make([]float64, len(embedding))
+			for i, v := range embedding {
+				service.Embedding[i] = float64(v)
+			}
+		}
+	}
+	
+	// Converte para map[string]interface{} para atualização
+	serviceMap, err := c.structToMap(service)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter service para map: %v", err)
+	}
+	
+	// Atualiza o documento
+	result, err := c.client.Collection(collectionName).Document(id).Update(ctx, serviceMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao atualizar serviço: %v", err)
+	}
+	
+	// Converte o resultado de volta para o struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+	
+	var updatedService models.PrefRioService
+	if err := json.Unmarshal(resultBytes, &updatedService); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+	
+	return &updatedService, nil
+}
+
+// DeletePrefRioService deleta um serviço da collection prefrio_services_base
+func (c *Client) DeletePrefRioService(ctx context.Context, id string) error {
+	collectionName := "prefrio_services_base"
+	
+	// Verifica se o documento existe
+	_, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+	if err != nil {
+		return fmt.Errorf("serviço não encontrado: %v", err)
+	}
+	
+	// Deleta o documento
+	_, err = c.client.Collection(collectionName).Document(id).Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("erro ao deletar serviço: %v", err)
+	}
+	
+	return nil
+}
+
+// GetPrefRioService busca um serviço específico por ID
+func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.PrefRioService, error) {
+	collectionName := "prefrio_services_base"
+	
+	result, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("serviço não encontrado: %v", err)
+	}
+	
+	// Converte o resultado para o struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+	
+	var service models.PrefRioService
+	if err := json.Unmarshal(resultBytes, &service); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+	
+	return &service, nil
+}
+
+// ListPrefRioServices lista serviços com paginação e filtros
+func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, filters map[string]interface{}) (*models.PrefRioServiceResponse, error) {
+	collectionName := "prefrio_services_base"
+
+	// Extrai nome_servico para busca textual
+	var nomeServico string
+	if nomeServicoValue, exists := filters["nome_servico"]; exists {
+		if str, ok := nomeServicoValue.(string); ok && str != "" {
+			nomeServico = str
+			// Remove nome_servico dos filtros normais para não aplicar correspondência exata
+			delete(filters, "nome_servico")
+		}
+	}
+
+	// Constrói filtros (sem nome_servico)
+	var filterBy string
+	if len(filters) > 0 {
+		var filterParts []string
+		for key, value := range filters {
+			switch v := value.(type) {
+			case string:
+				if v != "" {
+					// Normaliza strings para melhor busca
+					normalizedValue := utils.NormalizarCategoria(v)
+					filterParts = append(filterParts, fmt.Sprintf("%s:=%s", key, normalizedValue))
+				}
+			case int:
+				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
+			case int64:
+				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
+			case bool:
+				filterParts = append(filterParts, fmt.Sprintf("%s:=%t", key, v))
+			}
+		}
+		if len(filterParts) > 0 {
+			filterBy = strings.Join(filterParts, " && ")
+		}
+	}
+
+	// Parâmetros de busca
+	searchParams := &api.SearchCollectionParams{
+		Page:          intPtr(page),
+		PerPage:       intPtr(perPage),
+		IncludeFields: stringPtr("*"),
+		ExcludeFields: stringPtr("embedding"),
+		SortBy:        stringPtr("last_update:desc"),
+	}
+
+	// Se há busca por nome do serviço, usa busca textual
+	if nomeServico != "" {
+		searchParams.Q = stringPtr(nomeServico)
+		searchParams.QueryBy = stringPtr("nome_servico,search_content")
+	} else {
+		// Busca genérica se não há termo específico
+		searchParams.Q = stringPtr("*")
+	}
+	
+	if filterBy != "" {
+		searchParams.FilterBy = &filterBy
+	}
+	
+	// Executa a busca
+	searchResult, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar serviços: %v", err)
+	}
+	
+	// Converte resultado
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+	
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+	
+	// Extrai serviços
+	var services []models.PrefRioService
+	if hits, ok := resultMap["hits"].([]interface{}); ok {
+		for _, hit := range hits {
+			if hitMap, ok := hit.(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					docBytes, _ := json.Marshal(document)
+					var service models.PrefRioService
+					if err := json.Unmarshal(docBytes, &service); err == nil {
+						services = append(services, service)
+					}
+				}
+			}
+		}
+	}
+	
+	// Monta resposta
+	found := 0
+	outOf := 0
+	if foundFloat, ok := resultMap["found"].(float64); ok {
+		found = int(foundFloat)
+		outOf = found
+	}
+	
+	response := &models.PrefRioServiceResponse{
+		Found:    found,
+		OutOf:    outOf,
+		Page:     page,
+		Services: services,
+	}
+	
+	return response, nil
+}
+
+// generateSearchContent gera o conteúdo de busca combinando campos relevantes
+func (c *Client) generateSearchContent(service *models.PrefRioService) string {
+	var content []string
+	
+	if service.NomeServico != "" {
+		content = append(content, service.NomeServico)
+	}
+	if service.Resumo != "" {
+		content = append(content, service.Resumo)
+	}
+	if service.DescricaoCompleta != "" {
+		content = append(content, service.DescricaoCompleta)
+	}
+	if service.TemaGeral != "" {
+		content = append(content, service.TemaGeral)
+	}
+	
+	// Adiciona órgãos gestores
+	content = append(content, service.OrgaoGestor...)
+	
+	// Adiciona público específico
+	content = append(content, service.PublicoEspecifico...)
+	
+	// Adiciona documentos necessários
+	content = append(content, service.DocumentosNecessarios...)
+	
+	return strings.Join(content, " ")
+}
+
+// structToMap converte um struct para map[string]interface{}
+func (c *Client) structToMap(v interface{}) (map[string]interface{}, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	
+	var result map[string]interface{}
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, err
+	}
+	
+	return result, nil
+}
+
+// boolPtr retorna um ponteiro para bool
+func boolPtr(b bool) *bool {
+	return &b
+}

@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prefeitura-rio/app-busca-search/internal/api/handlers"
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
+	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -17,6 +18,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	typesenseClient := typesense.NewClient(cfg)
 
 	buscaHandler := handlers.NewBuscaHandler(typesenseClient)
+	adminHandler := handlers.NewAdminHandler(typesenseClient)
 
 	api := r.Group("/api/v1")
 	{
@@ -24,6 +26,36 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		api.GET("/categoria/:collections", buscaHandler.BuscaPorCategoria)
 		api.GET("/documento/:collection/:id", buscaHandler.BuscaPorID)
 		api.GET("/categorias-relevancia", buscaHandler.CategoriasRelevancia)
+	}
+
+	// Rotas administrativas com autenticação JWT (sem validação de roles)
+	admin := api.Group("/admin")
+	admin.Use(middlewares.JWTAuthMiddleware()) // Extrai dados do JWT
+	admin.Use(middlewares.RequireJWTAuth())    // Verifica apenas se está autenticado
+	{
+		services := admin.Group("/services")
+		{
+			// Criar serviço
+			services.POST("", adminHandler.CreateService)
+			
+			// Listar serviços
+			services.GET("", adminHandler.ListServices)
+			
+			// Buscar serviço por ID
+			services.GET("/:id", adminHandler.GetService)
+			
+			// Atualizar serviço
+			services.PUT("/:id", adminHandler.UpdateService)
+			
+			// Deletar serviço
+			services.DELETE("/:id", adminHandler.DeleteService)
+			
+			// Publicar serviço
+			services.PATCH("/:id/publish", adminHandler.PublishService)
+			
+			// Despublicar serviço
+			services.PATCH("/:id/unpublish", adminHandler.UnpublishService)
+		}
 	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
