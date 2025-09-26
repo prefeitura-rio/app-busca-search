@@ -1037,8 +1037,18 @@ func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.Pref
 // ListPrefRioServices lista serviços com paginação e filtros
 func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, filters map[string]interface{}) (*models.PrefRioServiceResponse, error) {
 	collectionName := "prefrio_services_base"
-	
-	// Constrói filtros
+
+	// Extrai nome_servico para busca textual
+	var nomeServico string
+	if nomeServicoValue, exists := filters["nome_servico"]; exists {
+		if str, ok := nomeServicoValue.(string); ok && str != "" {
+			nomeServico = str
+			// Remove nome_servico dos filtros normais para não aplicar correspondência exata
+			delete(filters, "nome_servico")
+		}
+	}
+
+	// Constrói filtros (sem nome_servico)
 	var filterBy string
 	if len(filters) > 0 {
 		var filterParts []string
@@ -1062,15 +1072,23 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 			filterBy = strings.Join(filterParts, " && ")
 		}
 	}
-	
+
 	// Parâmetros de busca
 	searchParams := &api.SearchCollectionParams{
-		Q:             stringPtr("*"),
 		Page:          intPtr(page),
 		PerPage:       intPtr(perPage),
 		IncludeFields: stringPtr("*"),
 		ExcludeFields: stringPtr("embedding"),
 		SortBy:        stringPtr("last_update:desc"),
+	}
+
+	// Se há busca por nome do serviço, usa busca textual
+	if nomeServico != "" {
+		searchParams.Q = stringPtr(nomeServico)
+		searchParams.QueryBy = stringPtr("nome_servico,search_content")
+	} else {
+		// Busca genérica se não há termo específico
+		searchParams.Q = stringPtr("*")
 	}
 	
 	if filterBy != "" {
