@@ -149,10 +149,10 @@ type PrefRioServiceRequest struct {
 	NomeServico               string                 `json:"nome_servico" validate:"required,max=255"`
 	OrgaoGestor               []string               `json:"orgao_gestor" validate:"required,min=1"`
 	Resumo                    string                 `json:"resumo" validate:"required,max=350"`
-	TempoAtendimento          string                 `json:"tempo_atendimento" validate:"required"`
-	CustoServico              string                 `json:"custo_servico" validate:"required"`
-	ResultadoSolicitacao      string                 `json:"resultado_solicitacao" validate:"required"`
-	DescricaoCompleta         string                 `json:"descricao_completa" validate:"required"`
+	TempoAtendimento          string                 `json:"tempo_atendimento,omitempty"`
+	CustoServico              string                 `json:"custo_servico,omitempty"`
+	ResultadoSolicitacao      string                 `json:"resultado_solicitacao,omitempty"`
+	DescricaoCompleta         string                 `json:"descricao_completa,omitempty"`
 	DocumentosNecessarios     []string               `json:"documentos_necessarios,omitempty"`
 	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty"`
 	CanaisDigitais            []string               `json:"canais_digitais,omitempty"`
@@ -160,7 +160,7 @@ type PrefRioServiceRequest struct {
 	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty"`
 	LegislacaoRelacionada     []string               `json:"legislacao_relacionada,omitempty"`
 	TemaGeral                 string                 `json:"tema_geral" validate:"required"`
-	PublicoEspecifico         []string               `json:"publico_especifico,omitempty"`
+	PublicoEspecifico         []string               `json:"publico_especifico" validate:"required,min=1"`
 	FixarDestaque             bool                   `json:"fixar_destaque"`
 	AwaitingApproval          bool                   `json:"awaiting_approval"`
 	PublishedAt               *int64                 `json:"published_at,omitempty"`

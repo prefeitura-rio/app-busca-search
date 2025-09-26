@@ -248,6 +248,7 @@ func (h *AdminHandler) GetService(c *gin.Context) {
 // @Param awaiting_approval query bool false "Filtrar por aguardando aprovação"
 // @Param is_free query bool false "Filtrar por serviços gratuitos"
 // @Param published_at query int false "Filtrar por data de publicação (timestamp)"
+// @Param nome_servico query string false "Filtrar por nome do serviço"
 // @Param field query string false "Campo para filtro dinâmico"
 // @Param value query string false "Valor para filtro dinâmico (usado com field)"
 // @Success 200 {object} models.PrefRioServiceResponse
@@ -299,6 +300,10 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 		if publishedAtInt, err := strconv.ParseInt(publishedAt, 10, 64); err == nil {
 			filters["published_at"] = publishedAtInt
 		}
+	}
+
+	if nomeServico := c.Query("nome_servico"); nomeServico != "" {
+		filters["nome_servico"] = nomeServico
 	}
 
 	// Filtro dinâmico por campo e valor
