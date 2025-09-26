@@ -91,6 +91,14 @@
             }
           },
           {
+            "description": "Filtrar por nome do serviço",
+            "name": "nome_servico",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Campo para filtro dinâmico",
             "name": "field",
             "in": "query",
@@ -1145,14 +1153,11 @@
       "models.PrefRioServiceRequest": {
         "type": "object",
         "required": [
-          "custo_servico",
-          "descricao_completa",
           "nome_servico",
           "orgao_gestor",
-          "resultado_solicitacao",
+          "publico_especifico",
           "resumo",
-          "tema_geral",
-          "tempo_atendimento"
+          "tema_geral"
         ],
         "properties": {
           "agents": {
@@ -1217,6 +1222,7 @@
           },
           "publico_especifico": {
             "type": "array",
+            "minItems": 1,
             "items": {
               "type": "string"
             }
