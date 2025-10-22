@@ -150,19 +150,27 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 	type hitWrapper struct {
 		textMatch      int64
 		vectorDistance float64
+		collection     string
 		raw            map[string]interface{}
 	}
 
 	var allHits []hitWrapper
 	totalFound := 0
 
-	for _, res := range searchResult.Results {
+	for i, res := range searchResult.Results {
 		if res.Found != nil {
 			totalFound += int(*res.Found)
 		}
 		if res.Hits == nil {
 			continue
 		}
+
+		// Identifica qual collection este resultado pertence
+		currentCollection := ""
+		if i < len(colecoes) {
+			currentCollection = colecoes[i]
+		}
+
 		for _, h := range *res.Hits {
 			hb, _ := json.Marshal(h)
 			var hMap map[string]interface{}
@@ -181,6 +189,7 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 			allHits = append(allHits, hitWrapper{
 				textMatch:      tm,
 				vectorDistance: vd,
+				collection:     currentCollection,
 				raw:            hMap,
 			})
 		}
@@ -193,7 +202,29 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 		return allHits[i].textMatch > allHits[j].textMatch
 	})
 
-	// Aplica filtro nos resultados ordenados, removendo documentos da carioca-digital que estão no CSV
+	// Primeiro filtro: Remove documentos legados que foram tombados
+	tombamentoFilteredHits := make([]hitWrapper, 0, len(allHits))
+	for _, hw := range allHits {
+		shouldKeep := true
+
+		// Extrai ID do documento
+		if document, ok := hw.raw["document"].(map[string]interface{}); ok {
+			if id, ok := document["id"].(string); ok {
+				// Verifica se documento legado foi tombado
+				if c.isLegacyCollectionTombado(ctx, hw.collection, id) {
+					shouldKeep = false
+					log.Printf("Removendo serviço tombado: collection=%s, id=%s", hw.collection, id)
+				}
+			}
+		}
+
+		if shouldKeep {
+			tombamentoFilteredHits = append(tombamentoFilteredHits, hw)
+		}
+	}
+	allHits = tombamentoFilteredHits
+
+	// Segundo filtro: Remove documentos da carioca-digital que estão no CSV (filtro existente)
 	filteredHits := make([]hitWrapper, 0, len(allHits))
 	for _, hw := range allHits {
 		shouldKeep := true
@@ -317,6 +348,21 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 				hitsCount = len(hits)
 				for _, h := range hits {
 					if hitMap, ok := h.(map[string]interface{}); ok {
+						// Verifica se documento legado foi tombado
+						shouldKeep := true
+						if document, ok := hitMap["document"].(map[string]interface{}); ok {
+							if id, ok := document["id"].(string); ok {
+								if c.isLegacyCollectionTombado(ctx, colecao, id) {
+									shouldKeep = false
+									log.Printf("Removendo serviço tombado da categoria: collection=%s, id=%s", colecao, id)
+								}
+							}
+						}
+
+						if !shouldKeep {
+							continue // Pula este documento
+						}
+
 						// Obtém relevância baseada no título
 						relevancia := 0
 						if document, ok := hitMap["document"].(map[string]interface{}); ok {
@@ -324,7 +370,7 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 								relevancia = c.relevanciaService.ObterRelevancia(titulo)
 							}
 						}
-						
+
 						allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
 							relevancia: relevancia,
 							hit:        hitMap,
@@ -549,9 +595,23 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 }
 
 // BuscaPorID busca um documento específico por ID retornando todos os campos exceto embedding e normalizados
+// Se o documento for de collection legada e foi tombado, retorna o documento novo
 func (c *Client) BuscaPorID(colecao string, documentoID string) (map[string]interface{}, error) {
 	ctx := context.Background()
-	
+
+	// Verifica se documento legado foi tombado
+	if c.isLegacyCollectionTombado(ctx, colecao, documentoID) {
+		// Busca o tombamento para obter o ID do serviço novo
+		tombamento, err := c.GetTombamentoByOldServiceID(ctx, colecao, documentoID)
+		if err == nil && tombamento != nil {
+			log.Printf("Documento %s da collection %s foi tombado, retornando serviço novo %s",
+				documentoID, colecao, tombamento.IDServicoNovo)
+
+			// Retorna o documento novo da prefrio_services_base
+			return c.BuscaPorID("prefrio_services_base", tombamento.IDServicoNovo)
+		}
+	}
+
 	document, err := c.client.Collection(colecao).Document(documentoID).Retrieve(ctx)
 	if err != nil {
 		return nil, err
@@ -562,7 +622,7 @@ func (c *Client) BuscaPorID(colecao string, documentoID string) (map[string]inte
 	if err != nil {
 		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
 	}
-	
+
 	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
@@ -1194,4 +1254,327 @@ func (c *Client) structToMap(v interface{}) (map[string]interface{}, error) {
 // boolPtr retorna um ponteiro para bool
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// ========== Funções de Tombamento ==========
+
+// createTombamentosCollection cria a collection tombamentos_overlay com o schema apropriado
+func (c *Client) createTombamentosCollection() error {
+	ctx := context.Background()
+	collectionName := "tombamentos_overlay"
+
+	schema := &api.CollectionSchema{
+		Name: collectionName,
+		Fields: []api.Field{
+			{Name: "id", Type: "string", Optional: boolPtr(true)},
+			{Name: "origem", Type: "string", Facet: boolPtr(true)},
+			{Name: "id_servico_antigo", Type: "string", Facet: boolPtr(false)},
+			{Name: "id_servico_novo", Type: "string", Facet: boolPtr(false)},
+			{Name: "criado_em", Type: "int64", Facet: boolPtr(false)},
+			{Name: "criado_por", Type: "string", Facet: boolPtr(true)},
+			{Name: "observacoes", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+		},
+		DefaultSortingField: stringPtr("criado_em"),
+	}
+
+	_, err := c.client.Collections().Create(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("erro ao criar collection %s: %v", collectionName, err)
+	}
+
+	log.Printf("Collection %s criada com sucesso", collectionName)
+	return nil
+}
+
+// EnsureTombamentosCollectionExists verifica se a collection tombamentos_overlay existe e a cria se necessário
+func (c *Client) EnsureTombamentosCollectionExists() error {
+	ctx := context.Background()
+	collectionName := "tombamentos_overlay"
+
+	// Verifica se a collection já existe
+	_, err := c.client.Collection(collectionName).Retrieve(ctx)
+	if err == nil {
+		// Collection já existe
+		return nil
+	}
+
+	// Se não existe, cria a collection
+	if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+		return c.createTombamentosCollection()
+	}
+
+	return err
+}
+
+// CreateTombamento cria um novo tombamento na collection tombamentos_overlay
+func (c *Client) CreateTombamento(ctx context.Context, tombamento *models.Tombamento) (*models.Tombamento, error) {
+	collectionName := "tombamentos_overlay"
+
+	// Garante que a collection existe
+	if err := c.EnsureTombamentosCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
+	// Define timestamp
+	tombamento.CriadoEm = time.Now().Unix()
+
+	// Converte para map[string]interface{} para inserção
+	tombamentoMap, err := c.structToMap(tombamento)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter tombamento para map: %v", err)
+	}
+
+	// Remove o ID se estiver vazio para auto-geração
+	if tombamento.ID == "" {
+		delete(tombamentoMap, "id")
+	}
+
+	// Insere o documento
+	result, err := c.client.Collection(collectionName).Documents().Create(ctx, tombamentoMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar tombamento: %v", err)
+	}
+
+	// Converte o resultado de volta para o struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var createdTombamento models.Tombamento
+	if err := json.Unmarshal(resultBytes, &createdTombamento); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &createdTombamento, nil
+}
+
+// GetTombamento busca um tombamento específico por ID
+func (c *Client) GetTombamento(ctx context.Context, id string) (*models.Tombamento, error) {
+	collectionName := "tombamentos_overlay"
+
+	result, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tombamento não encontrado: %v", err)
+	}
+
+	// Converte o resultado para o struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var tombamento models.Tombamento
+	if err := json.Unmarshal(resultBytes, &tombamento); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &tombamento, nil
+}
+
+// UpdateTombamento atualiza um tombamento existente na collection tombamentos_overlay
+func (c *Client) UpdateTombamento(ctx context.Context, id string, tombamento *models.Tombamento) (*models.Tombamento, error) {
+	collectionName := "tombamentos_overlay"
+
+	// Verifica se o documento existe
+	_, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("tombamento não encontrado: %v", err)
+	}
+
+	// Define o ID
+	tombamento.ID = id
+
+	// Converte para map[string]interface{} para atualização
+	tombamentoMap, err := c.structToMap(tombamento)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter tombamento para map: %v", err)
+	}
+
+	// Atualiza o documento
+	result, err := c.client.Collection(collectionName).Document(id).Update(ctx, tombamentoMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao atualizar tombamento: %v", err)
+	}
+
+	// Converte o resultado de volta para o struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var updatedTombamento models.Tombamento
+	if err := json.Unmarshal(resultBytes, &updatedTombamento); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &updatedTombamento, nil
+}
+
+// DeleteTombamento deleta um tombamento da collection tombamentos_overlay
+func (c *Client) DeleteTombamento(ctx context.Context, id string) error {
+	collectionName := "tombamentos_overlay"
+
+	// Verifica se o documento existe
+	_, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+	if err != nil {
+		return fmt.Errorf("tombamento não encontrado: %v", err)
+	}
+
+	// Deleta o documento
+	_, err = c.client.Collection(collectionName).Document(id).Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("erro ao deletar tombamento: %v", err)
+	}
+
+	return nil
+}
+
+// ListTombamentos lista tombamentos com paginação e filtros
+func (c *Client) ListTombamentos(ctx context.Context, page, perPage int, filters map[string]interface{}) (*models.TombamentoResponse, error) {
+	collectionName := "tombamentos_overlay"
+
+	// Constrói filtros
+	var filterBy string
+	if len(filters) > 0 {
+		var filterParts []string
+		for key, value := range filters {
+			switch v := value.(type) {
+			case string:
+				if v != "" {
+					filterParts = append(filterParts, fmt.Sprintf("%s:=%s", key, v))
+				}
+			case int64:
+				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
+			}
+		}
+		if len(filterParts) > 0 {
+			filterBy = strings.Join(filterParts, " && ")
+		}
+	}
+
+	// Parâmetros de busca
+	searchParams := &api.SearchCollectionParams{
+		Q:       stringPtr("*"),
+		Page:    intPtr(page),
+		PerPage: intPtr(perPage),
+		SortBy:  stringPtr("criado_em:desc"),
+	}
+
+	if filterBy != "" {
+		searchParams.FilterBy = &filterBy
+	}
+
+	// Executa a busca
+	searchResult, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar tombamentos: %v", err)
+	}
+
+	// Converte resultado
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	// Extrai tombamentos
+	var tombamentos []models.Tombamento
+	if hits, ok := resultMap["hits"].([]interface{}); ok {
+		for _, hit := range hits {
+			if hitMap, ok := hit.(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					docBytes, _ := json.Marshal(document)
+					var tombamento models.Tombamento
+					if err := json.Unmarshal(docBytes, &tombamento); err == nil {
+						tombamentos = append(tombamentos, tombamento)
+					}
+				}
+			}
+		}
+	}
+
+	// Monta resposta
+	found := 0
+	outOf := 0
+	if foundFloat, ok := resultMap["found"].(float64); ok {
+		found = int(foundFloat)
+		outOf = found
+	}
+
+	response := &models.TombamentoResponse{
+		Found:       found,
+		OutOf:       outOf,
+		Page:        page,
+		Tombamentos: tombamentos,
+	}
+
+	return response, nil
+}
+
+// GetTombamentoByOldServiceID busca um tombamento pelo ID do serviço antigo
+func (c *Client) GetTombamentoByOldServiceID(ctx context.Context, origem, idServicoAntigo string) (*models.Tombamento, error) {
+	collectionName := "tombamentos_overlay"
+
+	// Constrói filtro por origem e id_servico_antigo
+	filterBy := fmt.Sprintf("origem:=%s && id_servico_antigo:=%s", origem, idServicoAntigo)
+
+	searchParams := &api.SearchCollectionParams{
+		Q:        stringPtr("*"),
+		FilterBy: &filterBy,
+		Page:     intPtr(1),
+		PerPage:  intPtr(1),
+	}
+
+	searchResult, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar tombamento: %v", err)
+	}
+
+	// Converte resultado
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	// Verifica se encontrou algum resultado
+	if found, ok := resultMap["found"].(float64); ok && found > 0 {
+		if hits, ok := resultMap["hits"].([]interface{}); ok && len(hits) > 0 {
+			if hitMap, ok := hits[0].(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					docBytes, _ := json.Marshal(document)
+					var tombamento models.Tombamento
+					if err := json.Unmarshal(docBytes, &tombamento); err == nil {
+						return &tombamento, nil
+					}
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("tombamento não encontrado para origem=%s e id_servico_antigo=%s", origem, idServicoAntigo)
+}
+
+// isLegacyCollectionTombado verifica se um documento de collection legada foi tombado
+// Retorna true se foi tombado (deve ser removido dos resultados)
+func (c *Client) isLegacyCollectionTombado(ctx context.Context, collection, documentID string) bool {
+	// Se não é collection legada, não filtra
+	if collection != "1746_v2_llm" && collection != "carioca-digital_v2_llm" {
+		return false
+	}
+
+	// Verifica se existe tombamento para este documento
+	_, err := c.GetTombamentoByOldServiceID(ctx, collection, documentID)
+
+	// Se encontrou tombamento, retorna true (deve ser removido)
+	return err == nil
 }

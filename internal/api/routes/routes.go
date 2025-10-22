@@ -19,6 +19,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	buscaHandler := handlers.NewBuscaHandler(typesenseClient)
 	adminHandler := handlers.NewAdminHandler(typesenseClient)
+	tombamentoHandler := handlers.NewTombamentoHandler(typesenseClient)
 
 	api := r.Group("/api/v1")
 	{
@@ -37,24 +38,45 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		{
 			// Criar serviço
 			services.POST("", adminHandler.CreateService)
-			
+
 			// Listar serviços
 			services.GET("", adminHandler.ListServices)
-			
+
 			// Buscar serviço por ID
 			services.GET("/:id", adminHandler.GetService)
-			
+
 			// Atualizar serviço
 			services.PUT("/:id", adminHandler.UpdateService)
-			
+
 			// Deletar serviço
 			services.DELETE("/:id", adminHandler.DeleteService)
-			
+
 			// Publicar serviço
 			services.PATCH("/:id/publish", adminHandler.PublishService)
-			
+
 			// Despublicar serviço
 			services.PATCH("/:id/unpublish", adminHandler.UnpublishService)
+		}
+
+		tombamentos := admin.Group("/tombamentos")
+		{
+			// Criar tombamento
+			tombamentos.POST("", tombamentoHandler.CreateTombamento)
+
+			// Listar tombamentos
+			tombamentos.GET("", tombamentoHandler.ListTombamentos)
+
+			// Buscar tombamento por serviço antigo
+			tombamentos.GET("/by-old-service", tombamentoHandler.GetTombamentoByOldService)
+
+			// Buscar tombamento por ID
+			tombamentos.GET("/:id", tombamentoHandler.GetTombamento)
+
+			// Atualizar tombamento
+			tombamentos.PUT("/:id", tombamentoHandler.UpdateTombamento)
+
+			// Deletar tombamento
+			tombamentos.DELETE("/:id", tombamentoHandler.DeleteTombamento)
 		}
 	}
 

@@ -326,11 +326,14 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 
 // PublishService godoc
 // @Summary Publica um serviço (altera status para 1 e marca como aprovado)
-// @Description Publica um serviço alterando seu status para 1 e awaiting_approval para false
+// @Description Publica um serviço alterando seu status para 1 e awaiting_approval para false. Opcionalmente, pode criar um tombamento se fornecidos os parâmetros origem e id_servico_antigo
 // @Tags admin
 // @Accept json
 // @Produce json
 // @Param id path string true "ID do serviço"
+// @Param origem query string false "Origem do serviço antigo (1746_v2_llm ou carioca-digital_v2_llm) para criar tombamento"
+// @Param id_servico_antigo query string false "ID do serviço antigo para criar tombamento"
+// @Param observacoes query string false "Observações sobre o tombamento"
 // @Success 200 {object} models.PrefRioService
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
@@ -352,10 +355,54 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 		return
 	}
 
+	// Verifica se deve criar tombamento
+	origem := c.Query("origem")
+	idServicoAntigo := c.Query("id_servico_antigo")
+
+	if origem != "" && idServicoAntigo != "" {
+		// Valida origem
+		if origem != "1746_v2_llm" && origem != "carioca-digital_v2_llm" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Origem deve ser '1746_v2_llm' ou 'carioca-digital_v2_llm'"})
+			return
+		}
+
+		// Verifica se o serviço antigo existe
+		_, err := h.typesenseClient.BuscaPorID(origem, idServicoAntigo)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço antigo não encontrado na collection " + origem})
+			return
+		}
+
+		// Verifica se já existe tombamento
+		existingTombamento, _ := h.typesenseClient.GetTombamentoByOldServiceID(ctx, origem, idServicoAntigo)
+		if existingTombamento != nil {
+			c.JSON(http.StatusConflict, gin.H{
+				"error": "Já existe um tombamento para este serviço antigo",
+				"tombamento_existente": existingTombamento,
+			})
+			return
+		}
+
+		// Cria tombamento
+		tombamento := &models.Tombamento{
+			Origem:          origem,
+			IDServicoAntigo: idServicoAntigo,
+			IDServicoNovo:   serviceID,
+			CriadoPor:       middlewares.GetUserName(c),
+			Observacoes:     c.Query("observacoes"),
+		}
+
+		_, err = h.typesenseClient.CreateTombamento(ctx, tombamento)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao criar tombamento: " + err.Error()})
+			return
+		}
+	}
+
 	// Atualiza status para publicado e marca como aprovado
 	service.Status = 1
 	service.AwaitingApproval = false
-	
+
 	// Atualiza o serviço
 	updatedService, err := h.typesenseClient.UpdatePrefRioService(ctx, serviceID, service)
 	if err != nil {
