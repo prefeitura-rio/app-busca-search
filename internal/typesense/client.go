@@ -55,13 +55,22 @@ func NewClient(cfg *config.Config) *Client {
 	// Inicializa o serviço de filtro
 	filterService := services.NewFilterService(cfg.FilterCSVPath)
 
-	return &Client{
+	client := &Client{
 		client: typesenseClient,
 		geminiClient: geminiClient,
 		embeddingModel: cfg.GeminiEmbeddingModel,
 		relevanciaService: relevanciaService,
 		filterService: filterService,
 	}
+
+	// Garante que a collection de tombamentos existe
+	if err := client.EnsureTombamentosCollectionExists(); err != nil {
+		log.Printf("Aviso: não foi possível criar/verificar collection tombamentos_overlay: %v", err)
+	} else {
+		log.Println("Collection tombamentos_overlay verificada/criada com sucesso")
+	}
+
+	return client
 }
 
 func (c *Client) GerarEmbedding(ctx context.Context, texto string) ([]float32, error) {
@@ -1353,6 +1362,11 @@ func (c *Client) CreateTombamento(ctx context.Context, tombamento *models.Tombam
 func (c *Client) GetTombamento(ctx context.Context, id string) (*models.Tombamento, error) {
 	collectionName := "tombamentos_overlay"
 
+	// Garante que a collection existe
+	if err := c.EnsureTombamentosCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
 	result, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("tombamento não encontrado: %v", err)
@@ -1433,6 +1447,11 @@ func (c *Client) DeleteTombamento(ctx context.Context, id string) error {
 // ListTombamentos lista tombamentos com paginação e filtros
 func (c *Client) ListTombamentos(ctx context.Context, page, perPage int, filters map[string]interface{}) (*models.TombamentoResponse, error) {
 	collectionName := "tombamentos_overlay"
+
+	// Garante que a collection existe
+	if err := c.EnsureTombamentosCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
 
 	// Constrói filtros
 	var filterBy string
@@ -1519,6 +1538,11 @@ func (c *Client) ListTombamentos(ctx context.Context, page, perPage int, filters
 // GetTombamentoByOldServiceID busca um tombamento pelo ID do serviço antigo
 func (c *Client) GetTombamentoByOldServiceID(ctx context.Context, origem, idServicoAntigo string) (*models.Tombamento, error) {
 	collectionName := "tombamentos_overlay"
+
+	// Garante que a collection existe
+	if err := c.EnsureTombamentosCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
 
 	// Constrói filtro por origem e id_servico_antigo
 	filterBy := fmt.Sprintf("origem:=%s && id_servico_antigo:=%s", origem, idServicoAntigo)
