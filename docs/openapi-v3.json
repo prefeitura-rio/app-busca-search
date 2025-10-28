@@ -1698,6 +1698,9 @@
           },
           "tempo_atendimento": {
             "type": "string"
+          },
+          "url_servico": {
+            "type": "string"
           }
         }
       },
@@ -1800,6 +1803,9 @@
             "type": "string"
           },
           "tempo_atendimento": {
+            "type": "string"
+          },
+          "url_servico": {
             "type": "string"
           }
         }
