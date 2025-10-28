@@ -70,6 +70,13 @@ func NewClient(cfg *config.Config) *Client {
 		log.Println("Collection tombamentos_overlay verificada/criada com sucesso")
 	}
 
+	// Garante que a collection prefrio_services_base existe
+	if err := client.EnsureCollectionExists("prefrio_services_base"); err != nil {
+		log.Printf("Aviso: não foi possível criar/verificar collection prefrio_services_base: %v", err)
+	} else {
+		log.Println("Collection prefrio_services_base verificada/criada com sucesso")
+	}
+
 	return client
 }
 
