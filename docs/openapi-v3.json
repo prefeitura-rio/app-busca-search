@@ -490,7 +490,7 @@
     },
     "/api/v1/admin/services/{id}/publish": {
       "patch": {
-        "description": "Publica um serviço alterando seu status para 1 e awaiting_approval para false",
+        "description": "Publica um serviço alterando seu status para 1 e awaiting_approval para false. Opcionalmente, pode criar um tombamento se fornecidos os parâmetros origem e id_servico_antigo",
         "tags": [
           "admin"
         ],
@@ -501,6 +501,30 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Origem do serviço antigo (1746_v2_llm ou carioca-digital_v2_llm) para criar tombamento",
+            "name": "origem",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ID do serviço antigo para criar tombamento",
+            "name": "id_servico_antigo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Observações sobre o tombamento",
+            "name": "observacoes",
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -605,6 +629,533 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/tombamentos": {
+      "get": {
+        "description": "Lista tombamentos com paginação e filtros opcionais",
+        "tags": [
+          "tombamentos"
+        ],
+        "summary": "Lista tombamentos com paginação e filtros",
+        "parameters": [
+          {
+            "description": "Página",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "description": "Resultados por página",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "description": "Filtrar por origem (1746_v2_llm ou carioca-digital_v2_llm)",
+            "name": "origem",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por criador",
+            "name": "criado_por",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.TombamentoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "description": "Cria um mapeamento de serviço antigo para serviço novo na collection tombamentos_overlay",
+        "tags": [
+          "tombamentos"
+        ],
+        "summary": "Cria um novo tombamento",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.TombamentoRequest"
+              }
+            }
+          },
+          "description": "Dados do tombamento",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.Tombamento"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/tombamentos/by-old-service": {
+      "get": {
+        "description": "Busca um tombamento pelo ID do serviço antigo e origem",
+        "tags": [
+          "tombamentos"
+        ],
+        "summary": "Busca tombamento por serviço antigo",
+        "parameters": [
+          {
+            "description": "Origem (1746_v2_llm ou carioca-digital_v2_llm)",
+            "name": "origem",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "ID do serviço antigo",
+            "name": "id_servico_antigo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.Tombamento"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/tombamentos/{id}": {
+      "get": {
+        "description": "Busca um tombamento específico por ID",
+        "tags": [
+          "tombamentos"
+        ],
+        "summary": "Busca um tombamento por ID",
+        "parameters": [
+          {
+            "description": "ID do tombamento",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.Tombamento"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "description": "Atualiza um tombamento existente",
+        "tags": [
+          "tombamentos"
+        ],
+        "summary": "Atualiza um tombamento existente",
+        "parameters": [
+          {
+            "description": "ID do tombamento",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.TombamentoRequest"
+              }
+            }
+          },
+          "description": "Dados atualizados do tombamento",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.Tombamento"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "description": "Deleta um tombamento, fazendo com que o serviço antigo volte a aparecer normalmente",
+        "tags": [
+          "tombamentos"
+        ],
+        "summary": "Deleta um tombamento (reverte substituição)",
+        "parameters": [
+          {
+            "description": "ID do tombamento",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
           },
           "400": {
             "description": "Bad Request",
@@ -1147,6 +1698,9 @@
           },
           "tempo_atendimento": {
             "type": "string"
+          },
+          "url_servico": {
+            "type": "string"
           }
         }
       },
@@ -1250,6 +1804,9 @@
           },
           "tempo_atendimento": {
             "type": "string"
+          },
+          "url_servico": {
+            "type": "string"
           }
         }
       },
@@ -1269,6 +1826,88 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/models.PrefRioService"
+            }
+          }
+        }
+      },
+      "models.Tombamento": {
+        "type": "object",
+        "required": [
+          "criado_por",
+          "id_servico_antigo",
+          "id_servico_novo",
+          "origem"
+        ],
+        "properties": {
+          "criado_em": {
+            "type": "integer"
+          },
+          "criado_por": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "id_servico_antigo": {
+            "type": "string"
+          },
+          "id_servico_novo": {
+            "type": "string"
+          },
+          "observacoes": {
+            "type": "string"
+          },
+          "origem": {
+            "type": "string",
+            "enum": [
+              "1746_v2_llm",
+              "carioca-digital_v2_llm"
+            ]
+          }
+        }
+      },
+      "models.TombamentoRequest": {
+        "type": "object",
+        "required": [
+          "id_servico_antigo",
+          "id_servico_novo",
+          "origem"
+        ],
+        "properties": {
+          "id_servico_antigo": {
+            "type": "string"
+          },
+          "id_servico_novo": {
+            "type": "string"
+          },
+          "observacoes": {
+            "type": "string"
+          },
+          "origem": {
+            "type": "string",
+            "enum": [
+              "1746_v2_llm",
+              "carioca-digital_v2_llm"
+            ]
+          }
+        }
+      },
+      "models.TombamentoResponse": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "integer"
+          },
+          "out_of": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "tombamentos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.Tombamento"
             }
           }
         }
