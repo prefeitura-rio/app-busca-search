@@ -62,7 +62,10 @@ func (h *BuscaHandler) BuscaMultiColecao(c *gin.Context) {
 
 	// Parsing das coleções - dividindo a string por vírgulas
 	colecoes := strings.Split(collectionsParam, ",")
-	
+
+	// Adiciona prefrio_services_base automaticamente às buscas
+	colecoes = append(colecoes, "prefrio_services_base")
+
 	// Realiza a busca em múltiplas coleções
 	ctx := context.Background()
 	resultado, err := h.typesenseClient.BuscaMultiColecaoComTexto(ctx, colecoes, query, pagina, porPagina)
@@ -117,7 +120,10 @@ func (h *BuscaHandler) BuscaPorCategoria(c *gin.Context) {
 
 	// Verifica se são múltiplas coleções ou uma única
 	colecoes := strings.Split(collectionsParam, ",")
-	
+
+	// Adiciona prefrio_services_base automaticamente às buscas
+	colecoes = append(colecoes, "prefrio_services_base")
+
 	var resultado map[string]interface{}
 	if len(colecoes) > 1 {
 		// Múltiplas coleções - usa o método multi-coleção
@@ -194,7 +200,10 @@ func (h *BuscaHandler) CategoriasRelevancia(c *gin.Context) {
 
 	// Parsing das coleções - dividindo a string por vírgulas
 	colecoes := strings.Split(collectionsParam, ",")
-	
+
+	// Adiciona prefrio_services_base automaticamente às buscas
+	colecoes = append(colecoes, "prefrio_services_base")
+
 	// Busca categorias com relevância
 	resultado, err := h.typesenseClient.BuscarCategoriasRelevancia(colecoes)
 	if err != nil {

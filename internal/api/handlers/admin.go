@@ -74,6 +74,7 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		Agents:                    request.Agents,
 		ExtraFields:               request.ExtraFields,
 		Status:                    request.Status,
+		URLServico:                request.URLServico,
 	}
 
 	// Cria o serviço
@@ -156,6 +157,7 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		Agents:                    request.Agents,
 		ExtraFields:               request.ExtraFields,
 		Status:                    request.Status,
+		URLServico:                request.URLServico,
 		CreatedAt:                 existingService.CreatedAt, // Preserva data de criação
 	}
 

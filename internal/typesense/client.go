@@ -139,11 +139,17 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 			IncludeFields: &includeFields,
 			ExcludeFields: &excludeFields,
 		}
-		
+
+		// Aplica filtro status:=1 (publicado) para prefrio_services_base
+		if colecao == "prefrio_services_base" {
+			filterBy := "status:=1"
+			collectionParams.FilterBy = &filterBy
+		}
+
 		if vectorQuery != nil {
 			collectionParams.VectorQuery = vectorQuery
 		}
-		
+
 		searches = append(searches, collectionParams)
 	}
 	
@@ -310,11 +316,18 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 	for _, colecao := range colecoes {
 		page := 1
 		perPageLimit := 250 // Máximo permitido pelo Typesense
-		
+
+		// Prepara o filtro para esta coleção específica
+		collectionFilterBy := filterBy
+		if colecao == "prefrio_services_base" {
+			// Adiciona filtro status:=1 (publicado) para prefrio_services_base
+			collectionFilterBy = fmt.Sprintf("%s && status:=1", filterBy)
+		}
+
 		for {
 			searchParams := &api.SearchCollectionParams{
 				Q:             stringPtr("*"),
-				FilterBy:      &filterBy,
+				FilterBy:      &collectionFilterBy,
 				Page:          intPtr(page),
 				PerPage:       intPtr(perPageLimit),
 				IncludeFields: &includeFields,
@@ -658,7 +671,7 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 			RelevanciaMedia:    0.0,
 		}
 	}
-	
+
 	// Para cada coleção, busca todas as categorias
 	for _, colecao := range colecoes {
 		// Busca usando facet para obter categorias únicas
@@ -667,6 +680,12 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 			FacetBy:   stringPtr("category"),
 			Page:      intPtr(1),
 			PerPage:   intPtr(0), // Só queremos os facets, não os documentos
+		}
+
+		// Adiciona filtro status:=1 (publicado) para prefrio_services_base
+		if colecao == "prefrio_services_base" {
+			filterBy := "status:=1"
+			searchParams.FilterBy = &filterBy
 		}
 		
 		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
@@ -741,7 +760,12 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, categoriasMap map[string]*models.CategoriaRelevancia) error {
 	ctx := context.Background()
 	filterBy := fmt.Sprintf("category:=%s", categoria)
-	
+
+	// Adiciona filtro status:=1 (publicado) para prefrio_services_base
+	if colecao == "prefrio_services_base" {
+		filterBy = fmt.Sprintf("%s && status:=1", filterBy)
+	}
+
 	relevanciaTotal := 0
 	quantidadeServicos := 0
 	page := 1
@@ -927,6 +951,7 @@ func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 			{Name: "created_at", Type: "int64", Facet: boolPtr(false)},
 			{Name: "last_update", Type: "int64", Facet: boolPtr(false)},
 			{Name: "search_content", Type: "string", Facet: boolPtr(false)},
+			{Name: "url_servico", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
 			{Name: "embedding", Type: "float[]", Facet: boolPtr(false), Optional: boolPtr(true), NumDim: intPtr(768)},
 		},
 		DefaultSortingField:  stringPtr("last_update"),
