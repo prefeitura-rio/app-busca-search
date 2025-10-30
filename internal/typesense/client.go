@@ -958,7 +958,7 @@ func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 			{Name: "created_at", Type: "int64", Facet: boolPtr(false)},
 			{Name: "last_update", Type: "int64", Facet: boolPtr(false)},
 			{Name: "search_content", Type: "string", Facet: boolPtr(false)},
-			{Name: "url_servico", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "buttons", Type: "object[]", Facet: boolPtr(false), Optional: boolPtr(true)},
 			{Name: "embedding", Type: "float[]", Facet: boolPtr(false), Optional: boolPtr(true), NumDim: intPtr(768)},
 		},
 		DefaultSortingField:  stringPtr("last_update"),
