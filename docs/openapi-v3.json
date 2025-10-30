@@ -1573,8 +1573,7 @@
           }
         }
       },
-<<<<<<< HEAD
-      "github_com_prefeitura-rio_app-busca-search_internal_models.Button": {
+      "models.Button": {
         "type": "object",
         "properties": {
           "descricao": {
@@ -1594,10 +1593,7 @@
           }
         }
       },
-      "github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService": {
-=======
       "models.PrefRioService": {
->>>>>>> 63079914e176b09a61c867ab5f5b7380fd07ad6b
         "type": "object",
         "required": [
           "autor",
@@ -1623,7 +1619,7 @@
           "buttons": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Button"
+              "$ref": "#/components/schemas/models.Button"
             }
           },
           "canais_digitais": {
@@ -1750,7 +1746,7 @@
           "buttons": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Button"
+              "$ref": "#/components/schemas/models.Button"
             }
           },
           "canais_digitais": {
