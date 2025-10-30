@@ -121,7 +121,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.PrefRioServiceResponse"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioServiceResponse"
                 }
               }
             }
@@ -169,7 +169,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models.PrefRioServiceRequest"
+                "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioServiceRequest"
               }
             }
           },
@@ -182,7 +182,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.PrefRioService"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService"
                 }
               }
             }
@@ -258,7 +258,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.PrefRioService"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService"
                 }
               }
             }
@@ -330,7 +330,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models.PrefRioServiceRequest"
+                "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioServiceRequest"
               }
             }
           },
@@ -343,7 +343,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.PrefRioService"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService"
                 }
               }
             }
@@ -536,7 +536,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.PrefRioService"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService"
                 }
               }
             }
@@ -625,7 +625,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.PrefRioService"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService"
                 }
               }
             }
@@ -739,7 +739,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.TombamentoResponse"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.TombamentoResponse"
                 }
               }
             }
@@ -787,7 +787,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models.TombamentoRequest"
+                "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.TombamentoRequest"
               }
             }
           },
@@ -800,7 +800,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.Tombamento"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Tombamento"
                 }
               }
             }
@@ -911,7 +911,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.Tombamento"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Tombamento"
                 }
               }
             }
@@ -987,7 +987,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.Tombamento"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Tombamento"
                 }
               }
             }
@@ -1059,7 +1059,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models.TombamentoRequest"
+                "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.TombamentoRequest"
               }
             }
           },
@@ -1072,7 +1072,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.Tombamento"
+                  "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Tombamento"
                 }
               }
             }
@@ -1562,7 +1562,7 @@
   ],
   "components": {
     "schemas": {
-      "models.AgentsConfig": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.AgentsConfig": {
         "type": "object",
         "properties": {
           "exclusive_for_agents": {
@@ -1573,7 +1573,7 @@
           }
         }
       },
-      "models.PrefRioService": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService": {
         "type": "object",
         "required": [
           "autor",
@@ -1588,7 +1588,7 @@
         ],
         "properties": {
           "agents": {
-            "$ref": "#/components/schemas/models.AgentsConfig"
+            "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.AgentsConfig"
           },
           "autor": {
             "type": "string"
@@ -1700,11 +1700,14 @@
             "type": "string"
           },
           "url_servico": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
-      "models.PrefRioServiceRequest": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioServiceRequest": {
         "type": "object",
         "required": [
           "nome_servico",
@@ -1715,7 +1718,7 @@
         ],
         "properties": {
           "agents": {
-            "$ref": "#/components/schemas/models.AgentsConfig"
+            "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.AgentsConfig"
           },
           "awaiting_approval": {
             "type": "boolean"
@@ -1806,11 +1809,14 @@
             "type": "string"
           },
           "url_servico": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
-      "models.PrefRioServiceResponse": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioServiceResponse": {
         "type": "object",
         "properties": {
           "found": {
@@ -1825,12 +1831,12 @@
           "services": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/models.PrefRioService"
+              "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService"
             }
           }
         }
       },
-      "models.Tombamento": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.Tombamento": {
         "type": "object",
         "required": [
           "criado_por",
@@ -1866,7 +1872,7 @@
           }
         }
       },
-      "models.TombamentoRequest": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.TombamentoRequest": {
         "type": "object",
         "required": [
           "id_servico_antigo",
@@ -1892,7 +1898,7 @@
           }
         }
       },
-      "models.TombamentoResponse": {
+      "github_com_prefeitura-rio_app-busca-search_internal_models.TombamentoResponse": {
         "type": "object",
         "properties": {
           "found": {
@@ -1907,7 +1913,7 @@
           "tombamentos": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/models.Tombamento"
+              "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Tombamento"
             }
           }
         }

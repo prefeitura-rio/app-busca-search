@@ -141,7 +141,7 @@ type PrefRioService struct {
 	CreatedAt                 int64                  `json:"created_at" typesense:"created_at"`
 	LastUpdate                int64                  `json:"last_update" typesense:"last_update"`
 	SearchContent             string                 `json:"search_content" typesense:"search_content"`
-	URLServico                string                 `json:"url_servico,omitempty" typesense:"url_servico,optional"`
+	URLServico                []string               `json:"url_servico,omitempty" typesense:"url_servico,optional"`
 	Embedding                 []float64              `json:"embedding,omitempty" typesense:"embedding,optional"`
 }
 
@@ -169,7 +169,7 @@ type PrefRioServiceRequest struct {
 	Agents                    *AgentsConfig          `json:"agents,omitempty"`
 	ExtraFields               map[string]interface{} `json:"extra_fields,omitempty"`
 	Status                    int                    `json:"status" validate:"min=0,max=1"`
-	URLServico                string                 `json:"url_servico,omitempty"`
+	URLServico                []string               `json:"url_servico,omitempty"`
 }
 
 // PrefRioServiceResponse representa a resposta de listagem de serviços
