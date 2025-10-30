@@ -1573,6 +1573,26 @@
           }
         }
       },
+      "github_com_prefeitura-rio_app-busca-search_internal_models.Button": {
+        "type": "object",
+        "properties": {
+          "descricao": {
+            "type": "string"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "ordem": {
+            "type": "integer"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "url_service": {
+            "type": "string"
+          }
+        }
+      },
       "github_com_prefeitura-rio_app-busca-search_internal_models.PrefRioService": {
         "type": "object",
         "required": [
@@ -1595,6 +1615,12 @@
           },
           "awaiting_approval": {
             "type": "boolean"
+          },
+          "buttons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Button"
+            }
           },
           "canais_digitais": {
             "type": "array",
@@ -1698,12 +1724,6 @@
           },
           "tempo_atendimento": {
             "type": "string"
-          },
-          "url_servico": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },
@@ -1722,6 +1742,12 @@
           },
           "awaiting_approval": {
             "type": "boolean"
+          },
+          "buttons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/github_com_prefeitura-rio_app-busca-search_internal_models.Button"
+            }
           },
           "canais_digitais": {
             "type": "array",
@@ -1807,12 +1833,6 @@
           },
           "tempo_atendimento": {
             "type": "string"
-          },
-          "url_servico": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           }
         }
       },

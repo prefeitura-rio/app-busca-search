@@ -112,6 +112,15 @@ type AgentsConfig struct {
 	ExclusiveForAgents bool   `json:"exclusive_for_agents" typesense:"exclusive_for_agents"`
 }
 
+// Button representa um botão de ação para o serviço
+type Button struct {
+	Titulo    string `json:"titulo"`
+	Descricao string `json:"descricao"`
+	IsEnabled bool   `json:"is_enabled"`
+	Ordem     int    `json:"ordem"`
+	URLService string `json:"url_service"`
+}
+
 // PrefRioService representa um serviço da collection prefrio_services_base
 type PrefRioService struct {
 	ID                        string                 `json:"id,omitempty" typesense:"id,optional"`
@@ -141,7 +150,7 @@ type PrefRioService struct {
 	CreatedAt                 int64                  `json:"created_at" typesense:"created_at"`
 	LastUpdate                int64                  `json:"last_update" typesense:"last_update"`
 	SearchContent             string                 `json:"search_content" typesense:"search_content"`
-	URLServico                []string               `json:"url_servico,omitempty" typesense:"url_servico,optional"`
+	Buttons                   []Button               `json:"buttons,omitempty" typesense:"buttons,optional"`
 	Embedding                 []float64              `json:"embedding,omitempty" typesense:"embedding,optional"`
 }
 
@@ -169,7 +178,7 @@ type PrefRioServiceRequest struct {
 	Agents                    *AgentsConfig          `json:"agents,omitempty"`
 	ExtraFields               map[string]interface{} `json:"extra_fields,omitempty"`
 	Status                    int                    `json:"status" validate:"min=0,max=1"`
-	URLServico                []string               `json:"url_servico,omitempty"`
+	Buttons                   []Button               `json:"buttons,omitempty"`
 }
 
 // PrefRioServiceResponse representa a resposta de listagem de serviços
