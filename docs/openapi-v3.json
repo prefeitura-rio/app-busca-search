@@ -18,7 +18,7 @@
   "paths": {
     "/api/v1/admin/services": {
       "get": {
-        "description": "Lista serviços com paginação e filtros opcionais",
+        "description": "Lista serviços com paginação e filtros opcionais. Cada serviço na resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -160,7 +160,7 @@
         ]
       },
       "post": {
-        "description": "Cria um novo serviço na collection prefrio_services_base",
+        "description": "Cria um novo serviço na collection prefrio_services_base. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -236,7 +236,7 @@
     },
     "/api/v1/admin/services/{id}": {
       "get": {
-        "description": "Busca um serviço específico por ID",
+        "description": "Busca um serviço específico por ID. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -310,7 +310,7 @@
         ]
       },
       "put": {
-        "description": "Atualiza um serviço existente",
+        "description": "Atualiza um serviço existente. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
