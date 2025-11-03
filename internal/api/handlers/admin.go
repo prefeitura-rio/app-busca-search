@@ -26,7 +26,7 @@ func NewAdminHandler(client *typesense.Client) *AdminHandler {
 
 // CreateService godoc
 // @Summary Cria um novo serviço
-// @Description Cria um novo serviço na collection prefrio_services_base
+// @Description Cria um novo serviço na collection prefrio_services_base. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -95,7 +95,7 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 
 // UpdateService godoc
 // @Summary Atualiza um serviço existente
-// @Description Atualiza um serviço existente
+// @Description Atualiza um serviço existente. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -225,7 +225,7 @@ func (h *AdminHandler) DeleteService(c *gin.Context) {
 
 // GetService godoc
 // @Summary Busca um serviço por ID
-// @Description Busca um serviço específico por ID
+// @Description Busca um serviço específico por ID. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -255,7 +255,7 @@ func (h *AdminHandler) GetService(c *gin.Context) {
 
 // ListServices godoc
 // @Summary Lista serviços com paginação e filtros
-// @Description Lista serviços com paginação e filtros opcionais
+// @Description Lista serviços com paginação e filtros opcionais. Cada serviço na resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.
 // @Tags admin
 // @Accept json
 // @Produce json

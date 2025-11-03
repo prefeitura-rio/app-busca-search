@@ -1,5 +1,11 @@
 package models
 
+import (
+	"encoding/json"
+
+	"github.com/prefeitura-rio/app-busca-search/internal/utils"
+)
+
 // EtapaDetalhada representa uma etapa detalhada do serviço
 type EtapaDetalhada struct {
 	Descricao        string `json:"descricao"`
@@ -152,6 +158,29 @@ type PrefRioService struct {
 	SearchContent             string                 `json:"search_content" typesense:"search_content"`
 	Buttons                   []Button               `json:"buttons,omitempty" typesense:"buttons,optional"`
 	Embedding                 []float64              `json:"embedding,omitempty" typesense:"embedding,optional"`
+}
+
+// MarshalJSON customiza a serialização JSON para adicionar campos plaintext
+func (s *PrefRioService) MarshalJSON() ([]byte, error) {
+	// Cria um alias para evitar recursão infinita
+	type Alias PrefRioService
+
+	// Cria estrutura auxiliar com todos os campos originais mais os plaintext
+	return json.Marshal(&struct {
+		*Alias
+		ResumoPlaintext                string   `json:"resumo_plaintext,omitempty"`
+		ResultadoSolicitacaoPlaintext  string   `json:"resultado_solicitacao_plaintext,omitempty"`
+		DescricaoCompletaPlaintext     string   `json:"descricao_completa_plaintext,omitempty"`
+		DocumentosNecessariosPlaintext []string `json:"documentos_necessarios_plaintext,omitempty"`
+		InstrucoesSolicitantePlaintext string   `json:"instrucoes_solicitante_plaintext,omitempty"`
+	}{
+		Alias:                          (*Alias)(s),
+		ResumoPlaintext:                utils.StripMarkdown(s.Resumo),
+		ResultadoSolicitacaoPlaintext:  utils.StripMarkdown(s.ResultadoSolicitacao),
+		DescricaoCompletaPlaintext:     utils.StripMarkdown(s.DescricaoCompleta),
+		DocumentosNecessariosPlaintext: utils.StripMarkdownArray(s.DocumentosNecessarios),
+		InstrucoesSolicitantePlaintext: utils.StripMarkdown(s.InstrucoesSolicitante),
+	})
 }
 
 // PrefRioServiceRequest representa os dados de entrada para criar/atualizar um serviço
