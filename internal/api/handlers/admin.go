@@ -77,9 +77,14 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		Buttons:                   request.Buttons,
 	}
 
-	// Cria o serviço
+	// Cria o serviço com rastreamento de versão
 	ctx := context.Background()
-	createdService, err := h.typesenseClient.CreatePrefRioService(ctx, service)
+	createdService, err := h.typesenseClient.CreatePrefRioServiceWithVersion(
+		ctx,
+		service,
+		middlewares.GetUserName(c),
+		middlewares.GetUserCPF(c),
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao criar serviço: " + err.Error()})
 		return
@@ -161,8 +166,15 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		CreatedAt:                 existingService.CreatedAt, // Preserva data de criação
 	}
 
-	// Atualiza o serviço
-	updatedService, err := h.typesenseClient.UpdatePrefRioService(ctx, serviceID, service)
+	// Atualiza o serviço com rastreamento de versão
+	updatedService, err := h.typesenseClient.UpdatePrefRioServiceWithVersion(
+		ctx,
+		serviceID,
+		service,
+		middlewares.GetUserName(c),
+		middlewares.GetUserCPF(c),
+		"", // reason vazio = usa default
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao atualizar serviço: " + err.Error()})
 		return
@@ -191,9 +203,14 @@ func (h *AdminHandler) DeleteService(c *gin.Context) {
 		return
 	}
 
-	// Deleta o serviço
+	// Deleta o serviço com rastreamento de versão
 	ctx := context.Background()
-	err := h.typesenseClient.DeletePrefRioService(ctx, serviceID)
+	err := h.typesenseClient.DeletePrefRioServiceWithVersion(
+		ctx,
+		serviceID,
+		middlewares.GetUserName(c),
+		middlewares.GetUserCPF(c),
+	)
 	if err != nil {
 		if err.Error() == "serviço não encontrado" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço não encontrado"})
@@ -405,8 +422,15 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 	service.Status = 1
 	service.AwaitingApproval = false
 
-	// Atualiza o serviço
-	updatedService, err := h.typesenseClient.UpdatePrefRioService(ctx, serviceID, service)
+	// Atualiza o serviço com rastreamento de versão
+	updatedService, err := h.typesenseClient.UpdatePrefRioServiceWithVersion(
+		ctx,
+		serviceID,
+		service,
+		middlewares.GetUserName(c),
+		middlewares.GetUserCPF(c),
+		"Publicação do serviço",
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao publicar serviço: " + err.Error()})
 		return
@@ -446,9 +470,16 @@ func (h *AdminHandler) UnpublishService(c *gin.Context) {
 	// Atualiza status para rascunho e marca como aguardando aprovação
 	service.Status = 0
 	service.AwaitingApproval = true
-	
-	// Atualiza o serviço
-	updatedService, err := h.typesenseClient.UpdatePrefRioService(ctx, serviceID, service)
+
+	// Atualiza o serviço com rastreamento de versão
+	updatedService, err := h.typesenseClient.UpdatePrefRioServiceWithVersion(
+		ctx,
+		serviceID,
+		service,
+		middlewares.GetUserName(c),
+		middlewares.GetUserCPF(c),
+		"Despublicação do serviço",
+	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao despublicar serviço: " + err.Error()})
 		return

@@ -1,0 +1,431 @@
+package services
+
+import (
+	"context"
+	"crypto/md5"
+	"encoding/json"
+	"fmt"
+	"log"
+	"reflect"
+	"time"
+
+	"github.com/prefeitura-rio/app-busca-search/internal/models"
+	"github.com/typesense/typesense-go/v3/typesense"
+	api "github.com/typesense/typesense-go/v3/typesense/api"
+	"github.com/typesense/typesense-go/v3/typesense/api/pointer"
+)
+
+// VersionService gerencia o histórico de versões dos serviços
+type VersionService struct {
+	typesenseClient *typesense.Client
+}
+
+// NewVersionService cria uma nova instância do VersionService
+func NewVersionService(typesenseClient *typesense.Client) *VersionService {
+	return &VersionService{
+		typesenseClient: typesenseClient,
+	}
+}
+
+// CaptureVersion captura uma nova versão do serviço
+func (vs *VersionService) CaptureVersion(
+	ctx context.Context,
+	service *models.PrefRioService,
+	changeType string,
+	createdBy string,
+	createdByCPF string,
+	changeReason string,
+	previousVersion *models.ServiceVersion,
+) (*models.ServiceVersion, error) {
+	// Determina o número da versão
+	versionNumber := int64(1)
+	var previousVersionNumber int64
+	if previousVersion != nil {
+		versionNumber = previousVersion.VersionNumber + 1
+		previousVersionNumber = previousVersion.VersionNumber
+	}
+
+	// Calcula hash do embedding se existir
+	embeddingHash := ""
+	if len(service.Embedding) > 0 {
+		embeddingHash = vs.calculateEmbeddingHash(service.Embedding)
+	}
+
+	// Cria o snapshot da versão
+	version := &models.ServiceVersion{
+		ServiceID:             service.ID,
+		VersionNumber:         versionNumber,
+		CreatedAt:             time.Now().Unix(),
+		CreatedBy:             createdBy,
+		CreatedByCPF:          createdByCPF,
+		ChangeType:            changeType,
+		ChangeReason:          changeReason,
+		PreviousVersion:       previousVersionNumber,
+		IsRollback:            false,
+		NomeServico:           service.NomeServico,
+		OrgaoGestor:           service.OrgaoGestor,
+		Resumo:                service.Resumo,
+		TempoAtendimento:      service.TempoAtendimento,
+		CustoServico:          service.CustoServico,
+		ResultadoSolicitacao:  service.ResultadoSolicitacao,
+		DescricaoCompleta:     service.DescricaoCompleta,
+		Autor:                 service.Autor,
+		DocumentosNecessarios: service.DocumentosNecessarios,
+		InstrucoesSolicitante: service.InstrucoesSolicitante,
+		CanaisDigitais:        service.CanaisDigitais,
+		CanaisPresenciais:     service.CanaisPresenciais,
+		ServicoNaoCobre:       service.ServicoNaoCobre,
+		LegislacaoRelacionada: service.LegislacaoRelacionada,
+		TemaGeral:             service.TemaGeral,
+		PublicoEspecifico:     service.PublicoEspecifico,
+		FixarDestaque:         service.FixarDestaque,
+		AwaitingApproval:      service.AwaitingApproval,
+		PublishedAt:           service.PublishedAt,
+		IsFree:                service.IsFree,
+		Status:                service.Status,
+		SearchContent:         service.SearchContent,
+		EmbeddingHash:         embeddingHash,
+	}
+
+	// Calcula diff se houver versão anterior
+	if previousVersion != nil {
+		changes := vs.ComputeDiff(previousVersion, version)
+		if len(changes) > 0 {
+			changesJSON, err := json.Marshal(changes)
+			if err != nil {
+				log.Printf("Erro ao serializar mudanças: %v", err)
+			} else {
+				version.ChangedFieldsJSON = string(changesJSON)
+			}
+		}
+	} else {
+		// Para a primeira versão, todas as mudanças são "create"
+		changes := vs.GetAllFieldsAsChanges(version)
+		if len(changes) > 0 {
+			changesJSON, err := json.Marshal(changes)
+			if err != nil {
+				log.Printf("Erro ao serializar mudanças: %v", err)
+			} else {
+				version.ChangedFieldsJSON = string(changesJSON)
+			}
+		}
+	}
+
+	// Salva a versão no Typesense
+	return vs.SaveVersion(ctx, version)
+}
+
+// ComputeDiff calcula as diferenças entre duas versões
+func (vs *VersionService) ComputeDiff(oldVersion, newVersion *models.ServiceVersion) []models.FieldChange {
+	changes := []models.FieldChange{}
+
+	// Compara cada campo
+	changes = append(changes, vs.compareField("nome_servico", oldVersion.NomeServico, newVersion.NomeServico)...)
+	changes = append(changes, vs.compareField("orgao_gestor", oldVersion.OrgaoGestor, newVersion.OrgaoGestor)...)
+	changes = append(changes, vs.compareField("resumo", oldVersion.Resumo, newVersion.Resumo)...)
+	changes = append(changes, vs.compareField("tempo_atendimento", oldVersion.TempoAtendimento, newVersion.TempoAtendimento)...)
+	changes = append(changes, vs.compareField("custo_servico", oldVersion.CustoServico, newVersion.CustoServico)...)
+	changes = append(changes, vs.compareField("resultado_solicitacao", oldVersion.ResultadoSolicitacao, newVersion.ResultadoSolicitacao)...)
+	changes = append(changes, vs.compareField("descricao_completa", oldVersion.DescricaoCompleta, newVersion.DescricaoCompleta)...)
+	changes = append(changes, vs.compareField("autor", oldVersion.Autor, newVersion.Autor)...)
+	changes = append(changes, vs.compareField("documentos_necessarios", oldVersion.DocumentosNecessarios, newVersion.DocumentosNecessarios)...)
+	changes = append(changes, vs.compareField("instrucoes_solicitante", oldVersion.InstrucoesSolicitante, newVersion.InstrucoesSolicitante)...)
+	changes = append(changes, vs.compareField("canais_digitais", oldVersion.CanaisDigitais, newVersion.CanaisDigitais)...)
+	changes = append(changes, vs.compareField("canais_presenciais", oldVersion.CanaisPresenciais, newVersion.CanaisPresenciais)...)
+	changes = append(changes, vs.compareField("servico_nao_cobre", oldVersion.ServicoNaoCobre, newVersion.ServicoNaoCobre)...)
+	changes = append(changes, vs.compareField("legislacao_relacionada", oldVersion.LegislacaoRelacionada, newVersion.LegislacaoRelacionada)...)
+	changes = append(changes, vs.compareField("tema_geral", oldVersion.TemaGeral, newVersion.TemaGeral)...)
+	changes = append(changes, vs.compareField("publico_especifico", oldVersion.PublicoEspecifico, newVersion.PublicoEspecifico)...)
+	changes = append(changes, vs.compareField("fixar_destaque", oldVersion.FixarDestaque, newVersion.FixarDestaque)...)
+	changes = append(changes, vs.compareField("awaiting_approval", oldVersion.AwaitingApproval, newVersion.AwaitingApproval)...)
+	changes = append(changes, vs.compareField("published_at", oldVersion.PublishedAt, newVersion.PublishedAt)...)
+	changes = append(changes, vs.compareField("is_free", oldVersion.IsFree, newVersion.IsFree)...)
+	changes = append(changes, vs.compareField("status", oldVersion.Status, newVersion.Status)...)
+	changes = append(changes, vs.compareField("search_content", oldVersion.SearchContent, newVersion.SearchContent)...)
+
+	return changes
+}
+
+// compareField compara um campo específico e retorna FieldChange se houver diferença
+func (vs *VersionService) compareField(fieldName string, oldValue, newValue interface{}) []models.FieldChange {
+	// Usa reflect para comparação profunda
+	if !reflect.DeepEqual(oldValue, newValue) {
+		valueType := vs.getValueType(newValue)
+		return []models.FieldChange{{
+			FieldName: fieldName,
+			OldValue:  oldValue,
+			NewValue:  newValue,
+			ValueType: valueType,
+		}}
+	}
+	return []models.FieldChange{}
+}
+
+// getValueType retorna o tipo de valor para FieldChange
+func (vs *VersionService) getValueType(value interface{}) string {
+	if value == nil {
+		return "nil"
+	}
+
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.String:
+		return "string"
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return "int"
+	case reflect.Bool:
+		return "bool"
+	case reflect.Slice, reflect.Array:
+		return "array"
+	case reflect.Map, reflect.Struct:
+		return "object"
+	case reflect.Ptr:
+		if v.IsNil() {
+			return "nil"
+		}
+		return vs.getValueType(v.Elem().Interface())
+	default:
+		return "unknown"
+	}
+}
+
+// GetAllFieldsAsChanges retorna todos os campos como mudanças (para versão 1)
+func (vs *VersionService) GetAllFieldsAsChanges(version *models.ServiceVersion) []models.FieldChange {
+	changes := []models.FieldChange{}
+
+	// Adiciona todos os campos não-vazios como "novas" mudanças
+	if version.NomeServico != "" {
+		changes = append(changes, models.FieldChange{FieldName: "nome_servico", NewValue: version.NomeServico, ValueType: "string"})
+	}
+	if len(version.OrgaoGestor) > 0 {
+		changes = append(changes, models.FieldChange{FieldName: "orgao_gestor", NewValue: version.OrgaoGestor, ValueType: "array"})
+	}
+	if version.Resumo != "" {
+		changes = append(changes, models.FieldChange{FieldName: "resumo", NewValue: version.Resumo, ValueType: "string"})
+	}
+	if version.TemaGeral != "" {
+		changes = append(changes, models.FieldChange{FieldName: "tema_geral", NewValue: version.TemaGeral, ValueType: "string"})
+	}
+	changes = append(changes, models.FieldChange{FieldName: "status", NewValue: version.Status, ValueType: "int"})
+
+	return changes
+}
+
+// calculateEmbeddingHash calcula MD5 hash do embedding
+func (vs *VersionService) calculateEmbeddingHash(embedding []float64) string {
+	// Serializa o embedding para bytes
+	data, err := json.Marshal(embedding)
+	if err != nil {
+		return ""
+	}
+	hash := md5.Sum(data)
+	return fmt.Sprintf("%x", hash)
+}
+
+// SaveVersion salva uma versão no Typesense
+func (vs *VersionService) SaveVersion(ctx context.Context, version *models.ServiceVersion) (*models.ServiceVersion, error) {
+	// Converte para map
+	versionMap, err := vs.structToMap(version)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter versão para map: %v", err)
+	}
+
+	// Remove ID se vazio para auto-geração
+	if version.ID == "" {
+		delete(versionMap, "id")
+	}
+
+	// Insere no Typesense
+	result, err := vs.typesenseClient.Collection("service_versions").Documents().Create(ctx, versionMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao salvar versão: %v", err)
+	}
+
+	// Converte resultado de volta para struct
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var savedVersion models.ServiceVersion
+	if err := json.Unmarshal(resultBytes, &savedVersion); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &savedVersion, nil
+}
+
+// GetLatestVersion busca a última versão de um serviço
+func (vs *VersionService) GetLatestVersion(ctx context.Context, serviceID string) (*models.ServiceVersion, error) {
+	filterBy := fmt.Sprintf("service_id:=%s", serviceID)
+	sortBy := "version_number:desc"
+
+	searchParams := &api.SearchCollectionParams{
+		Q:        pointer.String("*"),
+		FilterBy: pointer.String(filterBy),
+		SortBy:   pointer.String(sortBy),
+		PerPage:  pointer.Int(1),
+	}
+
+	result, err := vs.typesenseClient.Collection("service_versions").Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar última versão: %v", err)
+	}
+
+	// Parse resultado
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var searchResult struct {
+		Hits []struct {
+			Document models.ServiceVersion `json:"document"`
+		} `json:"hits"`
+	}
+
+	if err := json.Unmarshal(resultBytes, &searchResult); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	if len(searchResult.Hits) == 0 {
+		return nil, nil // Nenhuma versão encontrada
+	}
+
+	return &searchResult.Hits[0].Document, nil
+}
+
+// GetVersionByNumber busca uma versão específica de um serviço
+func (vs *VersionService) GetVersionByNumber(ctx context.Context, serviceID string, versionNumber int64) (*models.ServiceVersion, error) {
+	filterBy := fmt.Sprintf("service_id:=%s && version_number:=%d", serviceID, versionNumber)
+
+	searchParams := &api.SearchCollectionParams{
+		Q:        pointer.String("*"),
+		FilterBy: pointer.String(filterBy),
+		PerPage:  pointer.Int(1),
+	}
+
+	result, err := vs.typesenseClient.Collection("service_versions").Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar versão: %v", err)
+	}
+
+	// Parse resultado
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var searchResult struct {
+		Hits []struct {
+			Document models.ServiceVersion `json:"document"`
+		} `json:"hits"`
+	}
+
+	if err := json.Unmarshal(resultBytes, &searchResult); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	if len(searchResult.Hits) == 0 {
+		return nil, fmt.Errorf("versão %d não encontrada", versionNumber)
+	}
+
+	return &searchResult.Hits[0].Document, nil
+}
+
+// ListVersions lista todas as versões de um serviço com paginação
+func (vs *VersionService) ListVersions(ctx context.Context, serviceID string, page, perPage int) (*models.VersionHistory, error) {
+	filterBy := fmt.Sprintf("service_id:=%s", serviceID)
+	sortBy := "version_number:desc"
+
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 || perPage > 100 {
+		perPage = 10
+	}
+
+	searchParams := &api.SearchCollectionParams{
+		Q:        pointer.String("*"),
+		FilterBy: pointer.String(filterBy),
+		SortBy:   pointer.String(sortBy),
+		Page:     pointer.Int(page),
+		PerPage:  pointer.Int(perPage),
+	}
+
+	result, err := vs.typesenseClient.Collection("service_versions").Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao listar versões: %v", err)
+	}
+
+	// Parse resultado
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var searchResult struct {
+		Found int `json:"found"`
+		OutOf int `json:"out_of"`
+		Hits  []struct {
+			Document models.ServiceVersion `json:"document"`
+		} `json:"hits"`
+	}
+
+	if err := json.Unmarshal(resultBytes, &searchResult); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	versions := make([]models.ServiceVersion, len(searchResult.Hits))
+	for i, hit := range searchResult.Hits {
+		versions[i] = hit.Document
+	}
+
+	return &models.VersionHistory{
+		Found:    searchResult.Found,
+		OutOf:    searchResult.OutOf,
+		Page:     page,
+		Versions: versions,
+	}, nil
+}
+
+// CompareVersions compara duas versões e retorna o diff
+func (vs *VersionService) CompareVersions(ctx context.Context, serviceID string, fromVersion, toVersion int64) (*models.VersionDiff, error) {
+	// Busca as duas versões
+	oldVer, err := vs.GetVersionByNumber(ctx, serviceID, fromVersion)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar versão %d: %v", fromVersion, err)
+	}
+
+	newVer, err := vs.GetVersionByNumber(ctx, serviceID, toVersion)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar versão %d: %v", toVersion, err)
+	}
+
+	// Computa diff
+	changes := vs.ComputeDiff(oldVer, newVer)
+
+	return &models.VersionDiff{
+		FromVersion: fromVersion,
+		ToVersion:   toVersion,
+		Changes:     changes,
+		ChangedBy:   newVer.CreatedBy,
+		ChangedAt:   newVer.CreatedAt,
+		ChangeType:  newVer.ChangeType,
+	}, nil
+}
+
+// structToMap converte struct para map[string]interface{}
+func (vs *VersionService) structToMap(v interface{}) (map[string]interface{}, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
