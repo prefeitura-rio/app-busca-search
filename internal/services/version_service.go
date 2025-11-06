@@ -376,6 +376,8 @@ func (vs *VersionService) ListVersions(ctx context.Context, serviceID string, pa
 	filterBy := fmt.Sprintf("service_id:=%s", serviceID)
 	sortBy := "version_number:desc"
 
+	log.Printf("[ListVersions] Buscando serviceID='%s', filterBy='%s'", serviceID, filterBy)
+
 	if page < 1 {
 		page = 1
 	}
@@ -412,6 +414,13 @@ func (vs *VersionService) ListVersions(ctx context.Context, serviceID string, pa
 
 	if err := json.Unmarshal(resultBytes, &searchResult); err != nil {
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	log.Printf("[ListVersions] Encontrado %d versões", searchResult.Found)
+	if len(searchResult.Hits) > 0 {
+		firstDoc := searchResult.Hits[0].Document
+		log.Printf("[ListVersions] Primeira versão: ID=%s, ServiceID=%s, VersionNumber=%d",
+			firstDoc.ID, firstDoc.ServiceID, firstDoc.VersionNumber)
 	}
 
 	versions := make([]models.ServiceVersion, len(searchResult.Hits))
