@@ -1280,13 +1280,89 @@ func (c *Client) DeletePrefRioServiceWithVersion(ctx context.Context, id string,
 }
 
 // ListServiceVersions lista todas as versões de um serviço
+// Se o serviço não tiver histórico de versões (serviços criados antes do sistema de versionamento),
+// cria automaticamente a versão 1 a partir do estado atual
 func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page, perPage int) (*models.VersionHistory, error) {
-	return c.versionService.ListVersions(ctx, serviceID, page, perPage)
+	history, err := c.versionService.ListVersions(ctx, serviceID, page, perPage)
+	if err != nil {
+		return nil, err
+	}
+
+	// Se não há versões registradas, cria a versão 1 automaticamente (lazy migration)
+	if history.Found == 0 {
+		// Busca o serviço atual
+		service, err := c.GetPrefRioService(ctx, serviceID)
+		if err != nil {
+			// Se o serviço não existe, retorna erro
+			return nil, fmt.Errorf("serviço não encontrado: %v", err)
+		}
+
+		// Cria a versão 1 inicial
+		initialVersion, err := c.versionService.CaptureVersion(
+			ctx,
+			service,
+			"create",
+			service.Autor,
+			"", // CPF não disponível para serviços legados
+			"Versão inicial (criada automaticamente para serviço pré-existente)",
+			nil, // Sem versão anterior
+		)
+		if err != nil {
+			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, err)
+			// Retorna histórico vazio ao invés de erro
+			return &models.VersionHistory{
+				Found:    0,
+				OutOf:    0,
+				Page:     page,
+				Versions: []models.ServiceVersion{},
+			}, nil
+		}
+
+		// Retorna a versão recém-criada como histórico
+		return &models.VersionHistory{
+			Found:    1,
+			OutOf:    1,
+			Page:     1,
+			Versions: []models.ServiceVersion{*initialVersion},
+		}, nil
+	}
+
+	return history, nil
 }
 
 // GetServiceVersionByNumber busca uma versão específica de um serviço
+// Se for versão 1 e não existir, tenta criar automaticamente para serviços legados
 func (c *Client) GetServiceVersionByNumber(ctx context.Context, serviceID string, versionNumber int64) (*models.ServiceVersion, error) {
-	return c.versionService.GetVersionByNumber(ctx, serviceID, versionNumber)
+	version, err := c.versionService.GetVersionByNumber(ctx, serviceID, versionNumber)
+
+	// Se não encontrou e é versão 1, tenta criar automaticamente (lazy migration)
+	if err != nil && versionNumber == 1 && strings.Contains(err.Error(), "não encontrada") {
+		// Busca o serviço atual
+		service, getErr := c.GetPrefRioService(ctx, serviceID)
+		if getErr != nil {
+			// Se o serviço não existe, retorna erro original
+			return nil, err
+		}
+
+		// Cria a versão 1 inicial
+		initialVersion, createErr := c.versionService.CaptureVersion(
+			ctx,
+			service,
+			"create",
+			service.Autor,
+			"", // CPF não disponível para serviços legados
+			"Versão inicial (criada automaticamente para serviço pré-existente)",
+			nil, // Sem versão anterior
+		)
+		if createErr != nil {
+			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, createErr)
+			return nil, err // Retorna erro original
+		}
+
+		return initialVersion, nil
+	}
+
+	return version, err
 }
 
 // GetLatestServiceVersion busca a última versão de um serviço
