@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
@@ -242,6 +243,12 @@ func (vs *VersionService) calculateEmbeddingHash(embedding []float64) string {
 func (vs *VersionService) SaveVersion(ctx context.Context, version *models.ServiceVersion) (*models.ServiceVersion, error) {
 	log.Printf("[SaveVersion] Iniciando para ServiceID=%s, VersionNumber=%d", version.ServiceID, version.VersionNumber)
 
+	// Garante que a collection existe antes de tentar salvar
+	if err := vs.ensureCollectionExists(ctx); err != nil {
+		log.Printf("[SaveVersion] Erro ao garantir que collection existe: %v", err)
+		return nil, fmt.Errorf("erro ao criar/verificar collection service_versions: %v", err)
+	}
+
 	// Converte para map
 	versionMap, err := vs.structToMap(version)
 	if err != nil {
@@ -438,6 +445,76 @@ func (vs *VersionService) CompareVersions(ctx context.Context, serviceID string,
 		ChangedAt:   newVer.CreatedAt,
 		ChangeType:  newVer.ChangeType,
 	}, nil
+}
+
+// ensureCollectionExists garante que a collection service_versions existe
+func (vs *VersionService) ensureCollectionExists(ctx context.Context) error {
+	// Verifica se a collection já existe
+	_, err := vs.typesenseClient.Collection("service_versions").Retrieve(ctx)
+	if err == nil {
+		// Collection já existe
+		return nil
+	}
+
+	// Se não existe (404), cria a collection
+	errMsg := err.Error()
+	if !strings.Contains(errMsg, "404") && !strings.Contains(errMsg, "Not found") && !strings.Contains(errMsg, "Not Found") {
+		// Erro que não é 404 - retorna o erro
+		return err
+	}
+
+	log.Printf("[ensureCollectionExists] Collection service_versions não existe, criando...")
+
+	// Cria a collection
+	schema := &api.CollectionSchema{
+		Name: "service_versions",
+		Fields: []api.Field{
+			{Name: "service_id", Type: "string", Facet: pointer.True()},
+			{Name: "version_number", Type: "int64"},
+			{Name: "created_at", Type: "int64", Sort: pointer.True()},
+			{Name: "created_by", Type: "string"},
+			{Name: "created_by_cpf", Type: "string", Facet: pointer.True()},
+			{Name: "change_type", Type: "string", Facet: pointer.True()},
+			{Name: "change_reason", Type: "string", Optional: pointer.True()},
+			{Name: "previous_version", Type: "int64", Optional: pointer.True()},
+			{Name: "is_rollback", Type: "bool", Facet: pointer.True()},
+			{Name: "rollback_to_version", Type: "int64", Optional: pointer.True()},
+			{Name: "nome_servico", Type: "string"},
+			{Name: "orgao_gestor", Type: "string[]", Facet: pointer.True()},
+			{Name: "resumo", Type: "string"},
+			{Name: "tempo_atendimento", Type: "string", Optional: pointer.True()},
+			{Name: "custo_servico", Type: "string", Optional: pointer.True()},
+			{Name: "resultado_solicitacao", Type: "string", Optional: pointer.True()},
+			{Name: "descricao_completa", Type: "string", Optional: pointer.True()},
+			{Name: "autor", Type: "string"},
+			{Name: "documentos_necessarios", Type: "string[]", Optional: pointer.True()},
+			{Name: "instrucoes_solicitante", Type: "string", Optional: pointer.True()},
+			{Name: "canais_digitais", Type: "string[]", Optional: pointer.True()},
+			{Name: "canais_presenciais", Type: "string[]", Optional: pointer.True()},
+			{Name: "servico_nao_cobre", Type: "string", Optional: pointer.True()},
+			{Name: "legislacao_relacionada", Type: "string[]", Optional: pointer.True()},
+			{Name: "tema_geral", Type: "string", Facet: pointer.True()},
+			{Name: "publico_especifico", Type: "string[]", Optional: pointer.True(), Facet: pointer.True()},
+			{Name: "fixar_destaque", Type: "bool", Facet: pointer.True()},
+			{Name: "awaiting_approval", Type: "bool", Facet: pointer.True()},
+			{Name: "published_at", Type: "int64", Optional: pointer.True()},
+			{Name: "is_free", Type: "bool", Optional: pointer.True(), Facet: pointer.True()},
+			{Name: "status", Type: "int32", Facet: pointer.True()},
+			{Name: "search_content", Type: "string"},
+			{Name: "embedding_hash", Type: "string", Optional: pointer.True()},
+			{Name: "changed_fields_json", Type: "string", Optional: pointer.True()},
+		},
+		DefaultSortingField: pointer.String("created_at"),
+	}
+
+	_, err = vs.typesenseClient.Collections().Create(ctx, schema)
+	if err != nil {
+		log.Printf("[ensureCollectionExists] Erro ao criar collection: %v", err)
+		return fmt.Errorf("erro ao criar collection service_versions: %v", err)
+	}
+
+	log.Printf("[ensureCollectionExists] Collection service_versions criada com sucesso")
+	return nil
 }
 
 // structToMap converte struct para map[string]interface{}
