@@ -330,6 +330,7 @@ func (vs *VersionService) GetLatestVersion(ctx context.Context, serviceID string
 // GetVersionByNumber busca uma versão específica de um serviço
 func (vs *VersionService) GetVersionByNumber(ctx context.Context, serviceID string, versionNumber int64) (*models.ServiceVersion, error) {
 	filterBy := fmt.Sprintf("service_id:=%s && version_number:=%d", serviceID, versionNumber)
+	log.Printf("[GetVersionByNumber] Buscando serviceID='%s', versionNumber=%d, filterBy='%s'", serviceID, versionNumber, filterBy)
 
 	searchParams := &api.SearchCollectionParams{
 		Q:        pointer.String("*"),
@@ -339,6 +340,7 @@ func (vs *VersionService) GetVersionByNumber(ctx context.Context, serviceID stri
 
 	result, err := vs.typesenseClient.Collection("service_versions").Documents().Search(ctx, searchParams)
 	if err != nil {
+		log.Printf("[GetVersionByNumber] Erro ao buscar: %v", err)
 		return nil, fmt.Errorf("erro ao buscar versão: %v", err)
 	}
 
@@ -349,7 +351,8 @@ func (vs *VersionService) GetVersionByNumber(ctx context.Context, serviceID stri
 	}
 
 	var searchResult struct {
-		Hits []struct {
+		Found int `json:"found"`
+		Hits  []struct {
 			Document models.ServiceVersion `json:"document"`
 		} `json:"hits"`
 	}
@@ -358,10 +361,13 @@ func (vs *VersionService) GetVersionByNumber(ctx context.Context, serviceID stri
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
 
+	log.Printf("[GetVersionByNumber] Encontrado %d resultado(s)", searchResult.Found)
+
 	if len(searchResult.Hits) == 0 {
 		return nil, fmt.Errorf("versão %d não encontrada", versionNumber)
 	}
 
+	log.Printf("[GetVersionByNumber] Retornando versão ID=%s", searchResult.Hits[0].Document.ID)
 	return &searchResult.Hits[0].Document, nil
 }
 
