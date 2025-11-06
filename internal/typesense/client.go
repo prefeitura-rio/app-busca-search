@@ -1205,14 +1205,10 @@ func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string,
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
 
-	// Se não foram fornecidas informações do usuário, usa fallback do serviço
-	effectiveUserName := userName
-	effectiveUserCPF := userCPF
-	if effectiveUserName == "" {
-		effectiveUserName = service.Autor
-	}
-	if effectiveUserCPF == "" {
-		effectiveUserCPF = "sistema" // Fallback para updates sem autenticação
+	// Valida que temos informações do usuário
+	if userName == "" || userCPF == "" {
+		log.Printf("ERRO: Tentativa de atualizar serviço sem informações do usuário! userName='%s' userCPF='%s'", userName, userCPF)
+		return nil, fmt.Errorf("informações do usuário não fornecidas - userName ou userCPF vazios")
 	}
 
 	// Captura nova versão (sempre)
@@ -1223,8 +1219,8 @@ func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string,
 		ctx,
 		&updatedService,
 		"update",
-		effectiveUserName,
-		effectiveUserCPF,
+		userName,
+		userCPF,
 		changeReason,
 		previousVersion,
 	)
@@ -1290,21 +1286,34 @@ func (c *Client) DeletePrefRioServiceWithVersion(ctx context.Context, id string,
 // Se o serviço não tiver histórico de versões (serviços criados antes do sistema de versionamento),
 // cria automaticamente a versão 1 a partir do estado atual
 func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page, perPage int) (*models.VersionHistory, error) {
+	log.Printf("[ListServiceVersions] Iniciando para serviceID=%s, page=%d, perPage=%d", serviceID, page, perPage)
+
 	history, err := c.versionService.ListVersions(ctx, serviceID, page, perPage)
+
+	log.Printf("[ListServiceVersions] ListVersions retornou: err=%v, history.Found=%d (se history != nil)",
+		err, func() int { if history != nil { return history.Found }; return -1 }())
 
 	// Se houve erro OU se não há versões registradas, tenta criar a versão 1 automaticamente (lazy migration)
 	shouldCreateInitialVersion := (err != nil) || (history != nil && history.Found == 0)
 
+	log.Printf("[ListServiceVersions] shouldCreateInitialVersion=%v", shouldCreateInitialVersion)
+
 	if shouldCreateInitialVersion {
+		log.Printf("[ListServiceVersions] Tentando criar versão inicial para serviceID=%s", serviceID)
+
 		// Busca o serviço atual
 		service, getErr := c.GetPrefRioService(ctx, serviceID)
 		if getErr != nil {
+			log.Printf("[ListServiceVersions] Erro ao buscar serviço: %v", getErr)
 			// Se o serviço não existe, retorna o erro original (se houver) ou erro de serviço não encontrado
 			if err != nil {
 				return nil, err
 			}
 			return nil, fmt.Errorf("serviço não encontrado: %v", getErr)
 		}
+
+		log.Printf("[ListServiceVersions] Serviço encontrado: ID=%s, NomeServico=%s, Autor=%s",
+			service.ID, service.NomeServico, service.Autor)
 
 		// Cria a versão 1 inicial
 		initialVersion, createErr := c.versionService.CaptureVersion(
@@ -1317,7 +1326,7 @@ func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page
 			nil, // Sem versão anterior
 		)
 		if createErr != nil {
-			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, createErr)
+			log.Printf("[ListServiceVersions] ERRO ao criar versão inicial para serviço %s: %v", serviceID, createErr)
 			// Retorna histórico vazio ao invés de erro
 			return &models.VersionHistory{
 				Found:    0,
@@ -1326,6 +1335,9 @@ func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page
 				Versions: []models.ServiceVersion{},
 			}, nil
 		}
+
+		log.Printf("[ListServiceVersions] Versão inicial criada com sucesso: ID=%s, VersionNumber=%d",
+			initialVersion.ID, initialVersion.VersionNumber)
 
 		// Retorna a versão recém-criada como histórico
 		return &models.VersionHistory{
@@ -1336,6 +1348,7 @@ func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page
 		}, nil
 	}
 
+	log.Printf("[ListServiceVersions] Retornando histórico existente com %d versões", history.Found)
 	return history, nil
 }
 

@@ -37,12 +37,18 @@ func (vs *VersionService) CaptureVersion(
 	changeReason string,
 	previousVersion *models.ServiceVersion,
 ) (*models.ServiceVersion, error) {
+	log.Printf("[CaptureVersion] Iniciando para serviceID=%s, changeType=%s, createdBy='%s', createdByCPF='%s'",
+		service.ID, changeType, createdBy, createdByCPF)
+
 	// Determina o número da versão
 	versionNumber := int64(1)
 	var previousVersionNumber int64
 	if previousVersion != nil {
 		versionNumber = previousVersion.VersionNumber + 1
 		previousVersionNumber = previousVersion.VersionNumber
+		log.Printf("[CaptureVersion] Versão anterior encontrada: %d, nova versão será: %d", previousVersionNumber, versionNumber)
+	} else {
+		log.Printf("[CaptureVersion] Nenhuma versão anterior, criando versão 1")
 	}
 
 	// Calcula hash do embedding se existir
@@ -111,8 +117,18 @@ func (vs *VersionService) CaptureVersion(
 		}
 	}
 
+	log.Printf("[CaptureVersion] Prestes a salvar versão: ServiceID=%s, VersionNumber=%d, CreatedBy='%s', CreatedByCPF='%s'",
+		version.ServiceID, version.VersionNumber, version.CreatedBy, version.CreatedByCPF)
+
 	// Salva a versão no Typesense
-	return vs.SaveVersion(ctx, version)
+	savedVersion, err := vs.SaveVersion(ctx, version)
+	if err != nil {
+		log.Printf("[CaptureVersion] ERRO ao salvar versão: %v", err)
+		return nil, err
+	}
+
+	log.Printf("[CaptureVersion] Versão salva com sucesso: ID=%s", savedVersion.ID)
+	return savedVersion, nil
 }
 
 // ComputeDiff calcula as diferenças entre duas versões
@@ -224,22 +240,31 @@ func (vs *VersionService) calculateEmbeddingHash(embedding []float64) string {
 
 // SaveVersion salva uma versão no Typesense
 func (vs *VersionService) SaveVersion(ctx context.Context, version *models.ServiceVersion) (*models.ServiceVersion, error) {
+	log.Printf("[SaveVersion] Iniciando para ServiceID=%s, VersionNumber=%d", version.ServiceID, version.VersionNumber)
+
 	// Converte para map
 	versionMap, err := vs.structToMap(version)
 	if err != nil {
+		log.Printf("[SaveVersion] Erro ao converter para map: %v", err)
 		return nil, fmt.Errorf("erro ao converter versão para map: %v", err)
 	}
 
 	// Remove ID se vazio para auto-geração
 	if version.ID == "" {
 		delete(versionMap, "id")
+		log.Printf("[SaveVersion] ID vazio removido para auto-geração")
 	}
+
+	log.Printf("[SaveVersion] Prestes a inserir no Typesense collection 'service_versions'")
 
 	// Insere no Typesense
 	result, err := vs.typesenseClient.Collection("service_versions").Documents().Create(ctx, versionMap, &api.DocumentIndexParameters{})
 	if err != nil {
+		log.Printf("[SaveVersion] ERRO do Typesense ao criar documento: %v", err)
 		return nil, fmt.Errorf("erro ao salvar versão: %v", err)
 	}
+
+	log.Printf("[SaveVersion] Documento criado no Typesense com sucesso")
 
 	// Converte resultado de volta para struct
 	resultBytes, err := json.Marshal(result)
