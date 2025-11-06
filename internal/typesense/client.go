@@ -1153,13 +1153,12 @@ func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string,
 		return nil, fmt.Errorf("serviço não encontrado: %v", err)
 	}
 
-	// Busca a versão anterior se usuário fornecido
-	var previousVersion *models.ServiceVersion
-	if userName != "" && userCPF != "" {
-		previousVersion, err = c.versionService.GetLatestVersion(ctx, id)
-		if err != nil {
-			log.Printf("Aviso: erro ao buscar versão anterior: %v", err)
-		}
+	// Busca a versão anterior (sempre, para rastrear mudanças)
+	previousVersion, err := c.versionService.GetLatestVersion(ctx, id)
+	if err != nil {
+		log.Printf("Aviso: erro ao buscar versão anterior: %v", err)
+		// Não é erro crítico, versão anterior pode não existir
+		previousVersion = nil
 	}
 
 	// Define o ID e atualiza o timestamp
@@ -1206,24 +1205,32 @@ func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string,
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
 
-	// Captura nova versão se informações do usuário forem fornecidas
-	if userName != "" && userCPF != "" {
-		if changeReason == "" {
-			changeReason = "Atualização do serviço"
-		}
-		_, err = c.versionService.CaptureVersion(
-			ctx,
-			&updatedService,
-			"update",
-			userName,
-			userCPF,
-			changeReason,
-			previousVersion,
-		)
-		if err != nil {
-			log.Printf("Aviso: erro ao capturar nova versão: %v", err)
-			// Não falha a atualização se a versão falhar
-		}
+	// Se não foram fornecidas informações do usuário, usa fallback do serviço
+	effectiveUserName := userName
+	effectiveUserCPF := userCPF
+	if effectiveUserName == "" {
+		effectiveUserName = service.Autor
+	}
+	if effectiveUserCPF == "" {
+		effectiveUserCPF = "sistema" // Fallback para updates sem autenticação
+	}
+
+	// Captura nova versão (sempre)
+	if changeReason == "" {
+		changeReason = "Atualização do serviço"
+	}
+	_, err = c.versionService.CaptureVersion(
+		ctx,
+		&updatedService,
+		"update",
+		effectiveUserName,
+		effectiveUserCPF,
+		changeReason,
+		previousVersion,
+	)
+	if err != nil {
+		log.Printf("Aviso: erro ao capturar nova versão: %v", err)
+		// Não falha a atualização se a versão falhar
 	}
 
 	return &updatedService, nil
