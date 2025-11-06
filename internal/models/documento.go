@@ -130,21 +130,21 @@ type Button struct {
 // PrefRioService representa um serviço da collection prefrio_services_base
 type PrefRioService struct {
 	ID                        string                 `json:"id,omitempty" typesense:"id,optional"`
-	NomeServico               string                 `json:"nome_servico" validate:"required,max=255" typesense:"nome_servico"`
+	NomeServico               string                 `json:"nome_servico" validate:"required,max=20000" typesense:"nome_servico"`
 	OrgaoGestor               []string               `json:"orgao_gestor" validate:"required,min=1" typesense:"orgao_gestor"`
-	Resumo                    string                 `json:"resumo" validate:"required,max=350" typesense:"resumo"`
-	TempoAtendimento          string                 `json:"tempo_atendimento" validate:"required" typesense:"tempo_atendimento"`
-	CustoServico              string                 `json:"custo_servico" validate:"required" typesense:"custo_servico"`
-	ResultadoSolicitacao      string                 `json:"resultado_solicitacao" validate:"required" typesense:"resultado_solicitacao"`
-	DescricaoCompleta         string                 `json:"descricao_completa" validate:"required" typesense:"descricao_completa"`
-	Autor                     string                 `json:"autor" validate:"required" typesense:"autor"`
+	Resumo                    string                 `json:"resumo" validate:"required,max=20000" typesense:"resumo"`
+	TempoAtendimento          string                 `json:"tempo_atendimento" validate:"required,max=20000" typesense:"tempo_atendimento"`
+	CustoServico              string                 `json:"custo_servico" validate:"required,max=20000" typesense:"custo_servico"`
+	ResultadoSolicitacao      string                 `json:"resultado_solicitacao" validate:"required,max=20000" typesense:"resultado_solicitacao"`
+	DescricaoCompleta         string                 `json:"descricao_completa" validate:"required,max=20000" typesense:"descricao_completa"`
+	Autor                     string                 `json:"autor" validate:"required,max=20000" typesense:"autor"`
 	DocumentosNecessarios     []string               `json:"documentos_necessarios,omitempty" typesense:"documentos_necessarios,optional"`
-	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty" typesense:"instrucoes_solicitante,optional"`
+	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty" validate:"max=20000" typesense:"instrucoes_solicitante,optional"`
 	CanaisDigitais            []string               `json:"canais_digitais,omitempty" typesense:"canais_digitais,optional"`
 	CanaisPresenciais         []string               `json:"canais_presenciais,omitempty" typesense:"canais_presenciais,optional"`
-	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty" typesense:"servico_nao_cobre,optional"`
+	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty" validate:"max=20000" typesense:"servico_nao_cobre,optional"`
 	LegislacaoRelacionada     []string               `json:"legislacao_relacionada,omitempty" typesense:"legislacao_relacionada,optional"`
-	TemaGeral                 string                 `json:"tema_geral" validate:"required" typesense:"tema_geral"`
+	TemaGeral                 string                 `json:"tema_geral" validate:"required,max=20000" typesense:"tema_geral"`
 	PublicoEspecifico         []string               `json:"publico_especifico,omitempty" typesense:"publico_especifico,optional"`
 	FixarDestaque             bool                   `json:"fixar_destaque" typesense:"fixar_destaque"`
 	AwaitingApproval          bool                   `json:"awaiting_approval" typesense:"awaiting_approval"`
@@ -185,20 +185,20 @@ func (s *PrefRioService) MarshalJSON() ([]byte, error) {
 
 // PrefRioServiceRequest representa os dados de entrada para criar/atualizar um serviço
 type PrefRioServiceRequest struct {
-	NomeServico               string                 `json:"nome_servico" validate:"required,max=255"`
+	NomeServico               string                 `json:"nome_servico" validate:"required,max=20000"`
 	OrgaoGestor               []string               `json:"orgao_gestor" validate:"required,min=1"`
-	Resumo                    string                 `json:"resumo" validate:"required,max=350"`
-	TempoAtendimento          string                 `json:"tempo_atendimento,omitempty"`
-	CustoServico              string                 `json:"custo_servico,omitempty"`
-	ResultadoSolicitacao      string                 `json:"resultado_solicitacao,omitempty"`
-	DescricaoCompleta         string                 `json:"descricao_completa,omitempty"`
+	Resumo                    string                 `json:"resumo" validate:"required,max=20000"`
+	TempoAtendimento          string                 `json:"tempo_atendimento,omitempty" validate:"max=20000"`
+	CustoServico              string                 `json:"custo_servico,omitempty" validate:"max=20000"`
+	ResultadoSolicitacao      string                 `json:"resultado_solicitacao,omitempty" validate:"max=20000"`
+	DescricaoCompleta         string                 `json:"descricao_completa,omitempty" validate:"max=20000"`
 	DocumentosNecessarios     []string               `json:"documentos_necessarios,omitempty"`
-	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty"`
+	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty" validate:"max=20000"`
 	CanaisDigitais            []string               `json:"canais_digitais,omitempty"`
 	CanaisPresenciais         []string               `json:"canais_presenciais,omitempty"`
-	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty"`
+	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty" validate:"max=20000"`
 	LegislacaoRelacionada     []string               `json:"legislacao_relacionada,omitempty"`
-	TemaGeral                 string                 `json:"tema_geral" validate:"required"`
+	TemaGeral                 string                 `json:"tema_geral" validate:"required,max=20000"`
 	PublicoEspecifico         []string               `json:"publico_especifico" validate:"required,min=1"`
 	FixarDestaque             bool                   `json:"fixar_destaque"`
 	AwaitingApproval          bool                   `json:"awaiting_approval"`
