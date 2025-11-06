@@ -1284,21 +1284,23 @@ func (c *Client) DeletePrefRioServiceWithVersion(ctx context.Context, id string,
 // cria automaticamente a versão 1 a partir do estado atual
 func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page, perPage int) (*models.VersionHistory, error) {
 	history, err := c.versionService.ListVersions(ctx, serviceID, page, perPage)
-	if err != nil {
-		return nil, err
-	}
 
-	// Se não há versões registradas, cria a versão 1 automaticamente (lazy migration)
-	if history.Found == 0 {
+	// Se houve erro OU se não há versões registradas, tenta criar a versão 1 automaticamente (lazy migration)
+	shouldCreateInitialVersion := (err != nil) || (history != nil && history.Found == 0)
+
+	if shouldCreateInitialVersion {
 		// Busca o serviço atual
-		service, err := c.GetPrefRioService(ctx, serviceID)
-		if err != nil {
-			// Se o serviço não existe, retorna erro
-			return nil, fmt.Errorf("serviço não encontrado: %v", err)
+		service, getErr := c.GetPrefRioService(ctx, serviceID)
+		if getErr != nil {
+			// Se o serviço não existe, retorna o erro original (se houver) ou erro de serviço não encontrado
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("serviço não encontrado: %v", getErr)
 		}
 
 		// Cria a versão 1 inicial
-		initialVersion, err := c.versionService.CaptureVersion(
+		initialVersion, createErr := c.versionService.CaptureVersion(
 			ctx,
 			service,
 			"create",
@@ -1307,8 +1309,8 @@ func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page
 			"Versão inicial (criada automaticamente para serviço pré-existente)",
 			nil, // Sem versão anterior
 		)
-		if err != nil {
-			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, err)
+		if createErr != nil {
+			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, createErr)
 			// Retorna histórico vazio ao invés de erro
 			return &models.VersionHistory{
 				Found:    0,
