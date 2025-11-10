@@ -60,3 +60,6 @@ coverage.html
 tmp/
 
 wiki.txt
+
+.direnv/
+.go/

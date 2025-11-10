@@ -18,7 +18,7 @@
   "paths": {
     "/api/v1/admin/services": {
       "get": {
-        "description": "Lista serviços com paginação e filtros opcionais",
+        "description": "Lista serviços com paginação e filtros opcionais. Cada serviço na resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -160,7 +160,7 @@
         ]
       },
       "post": {
-        "description": "Cria um novo serviço na collection prefrio_services_base",
+        "description": "Cria um novo serviço na collection prefrio_services_base. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -236,7 +236,7 @@
     },
     "/api/v1/admin/services/{id}": {
       "get": {
-        "description": "Busca um serviço específico por ID",
+        "description": "Busca um serviço específico por ID. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -310,7 +310,7 @@
         ]
       },
       "put": {
-        "description": "Atualiza um serviço existente",
+        "description": "Atualiza um serviço existente. A resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
         "tags": [
           "admin"
         ],
@@ -601,6 +601,106 @@
         ]
       }
     },
+    "/api/v1/admin/services/{id}/rollback": {
+      "post": {
+        "description": "Cria uma nova versão que restaura o estado de uma versão anterior (git-revert style)",
+        "tags": [
+          "versions"
+        ],
+        "summary": "Realiza rollback de um serviço para uma versão anterior",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.RollbackRequest"
+              }
+            }
+          },
+          "description": "Dados do rollback",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/services/{id}/unpublish": {
       "patch": {
         "description": "Despublica um serviço alterando seu status para 0 e awaiting_approval para true",
@@ -626,6 +726,305 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/services/{id}/versions": {
+      "get": {
+        "description": "Retorna o histórico completo de versões de um serviço com paginação",
+        "tags": [
+          "versions"
+        ],
+        "summary": "Lista todas as versões de um serviço",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Página",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "description": "Resultados por página",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.VersionHistory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/services/{id}/versions/compare": {
+      "get": {
+        "description": "Retorna as diferenças entre duas versões",
+        "tags": [
+          "versions"
+        ],
+        "summary": "Compara duas versões de um serviço",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Versão de origem",
+            "name": "from_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Versão de destino",
+            "name": "to_version",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.VersionDiff"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/services/{id}/versions/{version}": {
+      "get": {
+        "description": "Retorna os detalhes de uma versão específica",
+        "tags": [
+          "versions"
+        ],
+        "summary": "Busca uma versão específica de um serviço",
+        "parameters": [
+          {
+            "description": "ID do serviço",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da versão",
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.ServiceVersion"
                 }
               }
             }
@@ -1593,6 +1992,22 @@
           }
         }
       },
+      "models.FieldChange": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "new_value": {},
+          "old_value": {},
+          "value_type": {
+            "description": "\"string\", \"int\", \"bool\", \"array\", \"object\"",
+            "type": "string",
+            "maxLength": 20000
+          }
+        }
+      },
       "models.PrefRioService": {
         "type": "object",
         "required": [
@@ -1611,7 +2026,8 @@
             "$ref": "#/components/schemas/models.AgentsConfig"
           },
           "autor": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "awaiting_approval": {
             "type": "boolean"
@@ -1638,10 +2054,12 @@
             "type": "integer"
           },
           "custo_servico": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "descricao_completa": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "documentos_necessarios": {
             "type": "array",
@@ -1666,7 +2084,8 @@
             "type": "string"
           },
           "instrucoes_solicitante": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "is_free": {
             "type": "boolean"
@@ -1682,7 +2101,7 @@
           },
           "nome_servico": {
             "type": "string",
-            "maxLength": 255
+            "maxLength": 20000
           },
           "orgao_gestor": {
             "type": "array",
@@ -1701,17 +2120,19 @@
             "type": "integer"
           },
           "resultado_solicitacao": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "resumo": {
             "type": "string",
-            "maxLength": 350
+            "maxLength": 20000
           },
           "search_content": {
             "type": "string"
           },
           "servico_nao_cobre": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "status": {
             "description": "0=Draft, 1=Published",
@@ -1720,10 +2141,12 @@
             "minimum": 0
           },
           "tema_geral": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "tempo_atendimento": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           }
         }
       },
@@ -1762,10 +2185,12 @@
             }
           },
           "custo_servico": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "descricao_completa": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "documentos_necessarios": {
             "type": "array",
@@ -1781,7 +2206,8 @@
             "type": "boolean"
           },
           "instrucoes_solicitante": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "is_free": {
             "type": "boolean"
@@ -1794,7 +2220,7 @@
           },
           "nome_servico": {
             "type": "string",
-            "maxLength": 255
+            "maxLength": 20000
           },
           "orgao_gestor": {
             "type": "array",
@@ -1814,14 +2240,16 @@
             "type": "integer"
           },
           "resultado_solicitacao": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "resumo": {
             "type": "string",
-            "maxLength": 350
+            "maxLength": 20000
           },
           "servico_nao_cobre": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "status": {
             "type": "integer",
@@ -1829,10 +2257,12 @@
             "minimum": 0
           },
           "tema_geral": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "tempo_atendimento": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           }
         }
       },
@@ -1856,6 +2286,185 @@
           }
         }
       },
+      "models.RollbackRequest": {
+        "type": "object",
+        "required": [
+          "to_version"
+        ],
+        "properties": {
+          "change_reason": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "to_version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "models.ServiceVersion": {
+        "type": "object",
+        "required": [
+          "change_type",
+          "created_by",
+          "created_by_cpf",
+          "service_id",
+          "version_number"
+        ],
+        "properties": {
+          "autor": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "awaiting_approval": {
+            "type": "boolean"
+          },
+          "canais_digitais": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "canais_presenciais": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "change_reason": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "change_type": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update",
+              "publish",
+              "unpublish",
+              "delete",
+              "rollback"
+            ]
+          },
+          "changed_fields_json": {
+            "description": "Campos de mudança (armazenados como JSON string no Typesense)",
+            "type": "string",
+            "maxLength": 20000
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "created_by": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "created_by_cpf": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "custo_servico": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "descricao_completa": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "documentos_necessarios": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "embedding_hash": {
+            "description": "Hash do embedding para verificação (não armazenamos o embedding completo)",
+            "type": "string",
+            "maxLength": 20000
+          },
+          "fixar_destaque": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "instrucoes_solicitante": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "is_free": {
+            "type": "boolean"
+          },
+          "is_rollback": {
+            "type": "boolean"
+          },
+          "legislacao_relacionada": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nome_servico": {
+            "description": "Snapshot completo do serviço (sem embedding para economizar espaço)",
+            "type": "string",
+            "maxLength": 20000
+          },
+          "orgao_gestor": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "previous_version": {
+            "type": "integer"
+          },
+          "publico_especifico": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "published_at": {
+            "type": "integer"
+          },
+          "resultado_solicitacao": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "resumo": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "rollback_to_version": {
+            "type": "integer"
+          },
+          "search_content": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "service_id": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "servico_nao_cobre": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "status": {
+            "type": "integer"
+          },
+          "tema_geral": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "tempo_atendimento": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "version_number": {
+            "type": "integer"
+          }
+        }
+      },
       "models.Tombamento": {
         "type": "object",
         "required": [
@@ -1869,19 +2478,23 @@
             "type": "integer"
           },
           "criado_por": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "id": {
             "type": "string"
           },
           "id_servico_antigo": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "id_servico_novo": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "observacoes": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "origem": {
             "type": "string",
@@ -1901,13 +2514,16 @@
         ],
         "properties": {
           "id_servico_antigo": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "id_servico_novo": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "observacoes": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 20000
           },
           "origem": {
             "type": "string",
@@ -1934,6 +2550,52 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/models.Tombamento"
+            }
+          }
+        }
+      },
+      "models.VersionDiff": {
+        "type": "object",
+        "properties": {
+          "change_type": {
+            "type": "string"
+          },
+          "changed_at": {
+            "type": "integer"
+          },
+          "changed_by": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.FieldChange"
+            }
+          },
+          "from_version": {
+            "type": "integer"
+          },
+          "to_version": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.VersionHistory": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "integer"
+          },
+          "out_of": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ServiceVersion"
             }
           }
         }

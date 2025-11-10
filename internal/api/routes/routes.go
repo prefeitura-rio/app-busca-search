@@ -20,6 +20,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	buscaHandler := handlers.NewBuscaHandler(typesenseClient)
 	adminHandler := handlers.NewAdminHandler(typesenseClient)
 	tombamentoHandler := handlers.NewTombamentoHandler(typesenseClient)
+	versionHandler := handlers.NewVersionHandler(typesenseClient)
 
 	api := r.Group("/api/v1")
 	{
@@ -56,6 +57,12 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 			// Despublicar serviço
 			services.PATCH("/:id/unpublish", adminHandler.UnpublishService)
+
+			// Rotas de versionamento
+			services.GET("/:id/versions", versionHandler.ListServiceVersions)
+			services.GET("/:id/versions/:version", versionHandler.GetServiceVersion)
+			services.GET("/:id/versions/compare", versionHandler.CompareServiceVersions)
+			services.POST("/:id/rollback", versionHandler.RollbackService)
 		}
 
 		tombamentos := admin.Group("/tombamentos")

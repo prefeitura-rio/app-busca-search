@@ -25,6 +25,7 @@ type Client struct {
 	embeddingModel string
 	relevanciaService *services.RelevanciaService
 	filterService *services.FilterService
+	versionService *services.VersionService
 }
 
 func NewClient(cfg *config.Config) *Client {
@@ -55,12 +56,16 @@ func NewClient(cfg *config.Config) *Client {
 	// Inicializa o serviço de filtro
 	filterService := services.NewFilterService(cfg.FilterCSVPath)
 
+	// Inicializa o serviço de versionamento (passa o client interno)
+	versionService := services.NewVersionService(typesenseClient)
+
 	client := &Client{
 		client: typesenseClient,
 		geminiClient: geminiClient,
 		embeddingModel: cfg.GeminiEmbeddingModel,
 		relevanciaService: relevanciaService,
 		filterService: filterService,
+		versionService: versionService,
 	}
 
 	// Garante que a collection de tombamentos existe
@@ -75,6 +80,13 @@ func NewClient(cfg *config.Config) *Client {
 		log.Printf("Aviso: não foi possível criar/verificar collection prefrio_services_base: %v", err)
 	} else {
 		log.Println("Collection prefrio_services_base verificada/criada com sucesso")
+	}
+
+	// Garante que a collection service_versions existe
+	if err := client.EnsureCollectionExists("service_versions"); err != nil {
+		log.Printf("Aviso: não foi possível criar/verificar collection service_versions: %v", err)
+	} else {
+		log.Println("Collection service_versions verificada/criada com sucesso")
 	}
 
 	return client
@@ -908,19 +920,27 @@ func intPtr(i int) *int {
 // EnsureCollectionExists verifica se a collection existe e a cria se necessário
 func (c *Client) EnsureCollectionExists(collectionName string) error {
 	ctx := context.Background()
-	
+
 	// Verifica se a collection já existe
 	_, err := c.client.Collection(collectionName).Retrieve(ctx)
 	if err == nil {
 		// Collection já existe
 		return nil
 	}
-	
-	// Se não existe, cria a collection
+
+	// Se não existe, cria a collection baseado no nome
 	if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
-		return c.createPrefRioServicesCollection(collectionName)
+		switch collectionName {
+		case "service_versions":
+			return c.createServiceVersionsCollection(collectionName)
+		case "prefrio_services_base":
+			return c.createPrefRioServicesCollection(collectionName)
+		default:
+			// Para outras collections, assume schema de prefrio_services_base
+			return c.createPrefRioServicesCollection(collectionName)
+		}
 	}
-	
+
 	return err
 }
 
@@ -974,23 +994,88 @@ func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 	return nil
 }
 
+// createServiceVersionsCollection cria a collection service_versions com o schema apropriado
+func (c *Client) createServiceVersionsCollection(collectionName string) error {
+	ctx := context.Background()
+
+	schema := &api.CollectionSchema{
+		Name: collectionName,
+		Fields: []api.Field{
+			{Name: "id", Type: "string", Optional: boolPtr(true)},
+			{Name: "service_id", Type: "string", Facet: boolPtr(true)},
+			{Name: "version_number", Type: "int64", Facet: boolPtr(true)},
+			{Name: "created_at", Type: "int64", Facet: boolPtr(false)},
+			{Name: "created_by", Type: "string", Facet: boolPtr(true)},
+			{Name: "created_by_cpf", Type: "string", Facet: boolPtr(true)},
+			{Name: "change_type", Type: "string", Facet: boolPtr(true)},
+			{Name: "change_reason", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "previous_version", Type: "int64", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "is_rollback", Type: "bool", Facet: boolPtr(true)},
+			{Name: "rollback_to_version", Type: "int64", Facet: boolPtr(false), Optional: boolPtr(true)},
+
+			// Snapshot do serviço (campos principais)
+			{Name: "nome_servico", Type: "string", Facet: boolPtr(false)},
+			{Name: "orgao_gestor", Type: "string[]", Facet: boolPtr(false)},
+			{Name: "resumo", Type: "string", Facet: boolPtr(false)},
+			{Name: "tempo_atendimento", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "custo_servico", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "resultado_solicitacao", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "descricao_completa", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "autor", Type: "string", Facet: boolPtr(false)},
+			{Name: "documentos_necessarios", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "instrucoes_solicitante", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "canais_digitais", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "canais_presenciais", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "servico_nao_cobre", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "legislacao_relacionada", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "tema_geral", Type: "string", Facet: boolPtr(false)},
+			{Name: "publico_especifico", Type: "string[]", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "fixar_destaque", Type: "bool", Facet: boolPtr(false)},
+			{Name: "awaiting_approval", Type: "bool", Facet: boolPtr(false)},
+			{Name: "published_at", Type: "int64", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "is_free", Type: "bool", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "status", Type: "int32", Facet: boolPtr(true)},
+			{Name: "search_content", Type: "string", Facet: boolPtr(false)},
+
+			// Campos de controle de versão
+			{Name: "embedding_hash", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "changed_fields_json", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+		},
+		DefaultSortingField: stringPtr("created_at"),
+		EnableNestedFields:  boolPtr(true),
+	}
+
+	_, err := c.client.Collections().Create(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("erro ao criar collection %s: %v", collectionName, err)
+	}
+
+	log.Printf("Collection %s criada com sucesso", collectionName)
+	return nil
+}
+
 // CreatePrefRioService cria um novo serviço na collection prefrio_services_base
 func (c *Client) CreatePrefRioService(ctx context.Context, service *models.PrefRioService) (*models.PrefRioService, error) {
+	return c.CreatePrefRioServiceWithVersion(ctx, service, "", "")
+}
+
+// CreatePrefRioServiceWithVersion cria um novo serviço e captura a primeira versão
+func (c *Client) CreatePrefRioServiceWithVersion(ctx context.Context, service *models.PrefRioService, userName, userCPF string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
-	
+
 	// Garante que a collection existe
 	if err := c.EnsureCollectionExists(collectionName); err != nil {
 		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
 	}
-	
+
 	// Define timestamps
 	now := time.Now().Unix()
 	service.CreatedAt = now
 	service.LastUpdate = now
-	
+
 	// Gera o search_content combinando campos relevantes
 	service.SearchContent = c.generateSearchContent(service)
-	
+
 	// Gera embedding se o cliente Gemini estiver disponível
 	if c.geminiClient != nil {
 		embedding, err := c.GerarEmbedding(ctx, service.SearchContent)
@@ -1004,55 +1089,85 @@ func (c *Client) CreatePrefRioService(ctx context.Context, service *models.PrefR
 			}
 		}
 	}
-	
+
 	// Converte para map[string]interface{} para inserção
 	serviceMap, err := c.structToMap(service)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao converter service para map: %v", err)
 	}
-	
+
 	// Remove o ID se estiver vazio para auto-geração
 	if service.ID == "" {
 		delete(serviceMap, "id")
 	}
-	
+
 	// Insere o documento
 	result, err := c.client.Collection(collectionName).Documents().Create(ctx, serviceMap, &api.DocumentIndexParameters{})
 	if err != nil {
 		return nil, fmt.Errorf("erro ao criar serviço: %v", err)
 	}
-	
+
 	// Converte o resultado de volta para o struct
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
 	}
-	
+
 	var createdService models.PrefRioService
 	if err := json.Unmarshal(resultBytes, &createdService); err != nil {
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
-	
+
+	// Captura versão 1 se informações do usuário forem fornecidas
+	if userName != "" && userCPF != "" {
+		_, err = c.versionService.CaptureVersion(
+			ctx,
+			&createdService,
+			"create",
+			userName,
+			userCPF,
+			"Criação inicial do serviço",
+			nil, // Não há versão anterior
+		)
+		if err != nil {
+			log.Printf("Aviso: erro ao capturar versão inicial: %v", err)
+			// Não falha a criação do serviço se a versão falhar
+		}
+	}
+
 	return &createdService, nil
 }
 
 // UpdatePrefRioService atualiza um serviço existente na collection prefrio_services_base
 func (c *Client) UpdatePrefRioService(ctx context.Context, id string, service *models.PrefRioService) (*models.PrefRioService, error) {
+	return c.UpdatePrefRioServiceWithVersion(ctx, id, service, "", "", "")
+}
+
+// UpdatePrefRioServiceWithVersion atualiza um serviço e captura a nova versão
+func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string, service *models.PrefRioService, userName, userCPF, changeReason string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
-	
+
 	// Verifica se o documento existe
 	_, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("serviço não encontrado: %v", err)
 	}
-	
+
+	// Busca a versão anterior (sempre, para rastrear mudanças)
+	previousVersion, err := c.versionService.GetLatestVersion(ctx, id)
+	if err != nil {
+		log.Printf("Aviso: erro ao buscar versão anterior: %v", err)
+		// Não é erro crítico, versão anterior pode não existir
+		previousVersion = nil
+	}
+
 	// Define o ID e atualiza o timestamp
 	service.ID = id
 	service.LastUpdate = time.Now().Unix()
-	
+
 	// Gera o search_content combinando campos relevantes
 	service.SearchContent = c.generateSearchContent(service)
-	
+
 	// Gera embedding se o cliente Gemini estiver disponível
 	if c.geminiClient != nil {
 		embedding, err := c.GerarEmbedding(ctx, service.SearchContent)
@@ -1066,50 +1181,220 @@ func (c *Client) UpdatePrefRioService(ctx context.Context, id string, service *m
 			}
 		}
 	}
-	
+
 	// Converte para map[string]interface{} para atualização
 	serviceMap, err := c.structToMap(service)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao converter service para map: %v", err)
 	}
-	
+
 	// Atualiza o documento
 	result, err := c.client.Collection(collectionName).Document(id).Update(ctx, serviceMap, &api.DocumentIndexParameters{})
 	if err != nil {
 		return nil, fmt.Errorf("erro ao atualizar serviço: %v", err)
 	}
-	
+
 	// Converte o resultado de volta para o struct
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
 	}
-	
+
 	var updatedService models.PrefRioService
 	if err := json.Unmarshal(resultBytes, &updatedService); err != nil {
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
-	
+
+	// Valida que temos informações do usuário
+	if userName == "" || userCPF == "" {
+		log.Printf("ERRO: Tentativa de atualizar serviço sem informações do usuário! userName='%s' userCPF='%s'", userName, userCPF)
+		return nil, fmt.Errorf("informações do usuário não fornecidas - userName ou userCPF vazios")
+	}
+
+	// Captura nova versão (sempre)
+	if changeReason == "" {
+		changeReason = "Atualização do serviço"
+	}
+	_, err = c.versionService.CaptureVersion(
+		ctx,
+		&updatedService,
+		"update",
+		userName,
+		userCPF,
+		changeReason,
+		previousVersion,
+	)
+	if err != nil {
+		log.Printf("Aviso: erro ao capturar nova versão: %v", err)
+		// Não falha a atualização se a versão falhar
+	}
+
 	return &updatedService, nil
 }
 
 // DeletePrefRioService deleta um serviço da collection prefrio_services_base
 func (c *Client) DeletePrefRioService(ctx context.Context, id string) error {
+	return c.DeletePrefRioServiceWithVersion(ctx, id, "", "")
+}
+
+// DeletePrefRioServiceWithVersion deleta um serviço e captura versão de deleção
+func (c *Client) DeletePrefRioServiceWithVersion(ctx context.Context, id string, userName, userCPF string) error {
 	collectionName := "prefrio_services_base"
-	
-	// Verifica se o documento existe
-	_, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
+
+	// Busca o serviço antes de deletar para capturar versão
+	service, err := c.GetPrefRioService(ctx, id)
 	if err != nil {
 		return fmt.Errorf("serviço não encontrado: %v", err)
 	}
-	
+
+	// Busca versão anterior se usuário fornecido
+	var previousVersion *models.ServiceVersion
+	if userName != "" && userCPF != "" {
+		previousVersion, err = c.versionService.GetLatestVersion(ctx, id)
+		if err != nil {
+			log.Printf("Aviso: erro ao buscar versão anterior: %v", err)
+		}
+	}
+
 	// Deleta o documento
 	_, err = c.client.Collection(collectionName).Document(id).Delete(ctx)
 	if err != nil {
 		return fmt.Errorf("erro ao deletar serviço: %v", err)
 	}
-	
+
+	// Captura versão de deleção se informações do usuário forem fornecidas
+	if userName != "" && userCPF != "" {
+		_, err = c.versionService.CaptureVersion(
+			ctx,
+			service,
+			"delete",
+			userName,
+			userCPF,
+			"Deleção do serviço",
+			previousVersion,
+		)
+		if err != nil {
+			log.Printf("Aviso: erro ao capturar versão de deleção: %v", err)
+			// Não falha a deleção se a versão falhar
+		}
+	}
+
 	return nil
+}
+
+// ListServiceVersions lista todas as versões de um serviço
+// Se o serviço não tiver histórico de versões (serviços criados antes do sistema de versionamento),
+// cria automaticamente a versão 1 a partir do estado atual
+func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page, perPage int) (*models.VersionHistory, error) {
+	log.Printf("[ListServiceVersions] Iniciando para serviceID=%s, page=%d, perPage=%d", serviceID, page, perPage)
+
+	history, err := c.versionService.ListVersions(ctx, serviceID, page, perPage)
+
+	log.Printf("[ListServiceVersions] ListVersions retornou: err=%v, history.Found=%d (se history != nil)",
+		err, func() int { if history != nil { return history.Found }; return -1 }())
+
+	// Se houve erro OU se não há versões registradas, tenta criar a versão 1 automaticamente (lazy migration)
+	shouldCreateInitialVersion := (err != nil) || (history != nil && history.Found == 0)
+
+	log.Printf("[ListServiceVersions] shouldCreateInitialVersion=%v", shouldCreateInitialVersion)
+
+	if shouldCreateInitialVersion {
+		log.Printf("[ListServiceVersions] Tentando criar versão inicial para serviceID=%s", serviceID)
+
+		// Busca o serviço atual
+		service, getErr := c.GetPrefRioService(ctx, serviceID)
+		if getErr != nil {
+			log.Printf("[ListServiceVersions] Erro ao buscar serviço: %v", getErr)
+			// Se o serviço não existe, retorna o erro original (se houver) ou erro de serviço não encontrado
+			if err != nil {
+				return nil, err
+			}
+			return nil, fmt.Errorf("serviço não encontrado: %v", getErr)
+		}
+
+		log.Printf("[ListServiceVersions] Serviço encontrado: ID=%s, NomeServico=%s, Autor=%s",
+			service.ID, service.NomeServico, service.Autor)
+
+		// Cria a versão 1 inicial
+		initialVersion, createErr := c.versionService.CaptureVersion(
+			ctx,
+			service,
+			"create",
+			service.Autor,
+			"", // CPF não disponível para serviços legados
+			"Versão inicial (criada automaticamente para serviço pré-existente)",
+			nil, // Sem versão anterior
+		)
+		if createErr != nil {
+			log.Printf("[ListServiceVersions] ERRO ao criar versão inicial para serviço %s: %v", serviceID, createErr)
+			// Retorna histórico vazio ao invés de erro
+			return &models.VersionHistory{
+				Found:    0,
+				OutOf:    0,
+				Page:     page,
+				Versions: []models.ServiceVersion{},
+			}, nil
+		}
+
+		log.Printf("[ListServiceVersions] Versão inicial criada com sucesso: ID=%s, VersionNumber=%d",
+			initialVersion.ID, initialVersion.VersionNumber)
+
+		// Retorna a versão recém-criada como histórico
+		return &models.VersionHistory{
+			Found:    1,
+			OutOf:    1,
+			Page:     1,
+			Versions: []models.ServiceVersion{*initialVersion},
+		}, nil
+	}
+
+	log.Printf("[ListServiceVersions] Retornando histórico existente com %d versões", history.Found)
+	return history, nil
+}
+
+// GetServiceVersionByNumber busca uma versão específica de um serviço
+// Se for versão 1 e não existir, tenta criar automaticamente para serviços legados
+func (c *Client) GetServiceVersionByNumber(ctx context.Context, serviceID string, versionNumber int64) (*models.ServiceVersion, error) {
+	version, err := c.versionService.GetVersionByNumber(ctx, serviceID, versionNumber)
+
+	// Se não encontrou e é versão 1, tenta criar automaticamente (lazy migration)
+	if err != nil && versionNumber == 1 && strings.Contains(err.Error(), "não encontrada") {
+		// Busca o serviço atual
+		service, getErr := c.GetPrefRioService(ctx, serviceID)
+		if getErr != nil {
+			// Se o serviço não existe, retorna erro original
+			return nil, err
+		}
+
+		// Cria a versão 1 inicial
+		initialVersion, createErr := c.versionService.CaptureVersion(
+			ctx,
+			service,
+			"create",
+			service.Autor,
+			"", // CPF não disponível para serviços legados
+			"Versão inicial (criada automaticamente para serviço pré-existente)",
+			nil, // Sem versão anterior
+		)
+		if createErr != nil {
+			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, createErr)
+			return nil, err // Retorna erro original
+		}
+
+		return initialVersion, nil
+	}
+
+	return version, err
+}
+
+// GetLatestServiceVersion busca a última versão de um serviço
+func (c *Client) GetLatestServiceVersion(ctx context.Context, serviceID string) (*models.ServiceVersion, error) {
+	return c.versionService.GetLatestVersion(ctx, serviceID)
+}
+
+// CompareServiceVersions compara duas versões de um serviço
+func (c *Client) CompareServiceVersions(ctx context.Context, serviceID string, fromVersion, toVersion int64) (*models.VersionDiff, error) {
+	return c.versionService.CompareVersions(ctx, serviceID, fromVersion, toVersion)
 }
 
 // GetPrefRioService busca um serviço específico por ID
