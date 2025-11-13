@@ -63,3 +63,5 @@ wiki.txt
 
 .direnv/
 .go/
+
+frontend/

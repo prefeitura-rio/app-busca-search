@@ -23,9 +23,8 @@ type Client struct {
 	client *typesense.Client
 	geminiClient *genai.Client
 	embeddingModel string
-	relevanciaService *services.RelevanciaService
-	filterService *services.FilterService
 	versionService *services.VersionService
+	// relevanciaService and filterService REMOVED - no longer used
 }
 
 func NewClient(cfg *config.Config) *Client {
@@ -44,17 +43,8 @@ func NewClient(cfg *config.Config) *Client {
 		geminiClient = nil
 	}
 
-	// Inicializa o serviço de relevância
-	relevanciaConfig := &models.RelevanciaConfig{
-		CaminhoArquivo1746:          cfg.RelevanciaArquivo1746,
-		CaminhoArquivoCariocaDigital: cfg.RelevanciaArquivoCariocaDigital,
-		IntervaloAtualizacao:         cfg.RelevanciaIntervaloAtualizacao,
-	}
-	
-	relevanciaService := services.NewRelevanciaService(relevanciaConfig)
-
-	// Inicializa o serviço de filtro
-	filterService := services.NewFilterService(cfg.FilterCSVPath)
+	// REMOVED: relevanciaService and filterService initialization
+	// These services have been removed from the codebase
 
 	// Inicializa o serviço de versionamento (passa o client interno)
 	versionService := services.NewVersionService(typesenseClient)
@@ -63,8 +53,6 @@ func NewClient(cfg *config.Config) *Client {
 		client: typesenseClient,
 		geminiClient: geminiClient,
 		embeddingModel: cfg.GeminiEmbeddingModel,
-		relevanciaService: relevanciaService,
-		filterService: filterService,
 		versionService: versionService,
 	}
 
@@ -89,7 +77,19 @@ func NewClient(cfg *config.Config) *Client {
 		log.Println("Collection service_versions verificada/criada com sucesso")
 	}
 
+	// Garante que a collection hub_search existe
+	if err := client.EnsureCollectionExists("hub_search"); err != nil {
+		log.Printf("Aviso: não foi possível criar/verificar collection hub_search: %v", err)
+	} else {
+		log.Println("Collection hub_search verificada/criada com sucesso")
+	}
+
 	return client
+}
+
+// GetClient retorna o cliente Typesense interno (para uso com hub services)
+func (c *Client) GetClient() *typesense.Client {
+	return c.client
 }
 
 func (c *Client) GerarEmbedding(ctx context.Context, texto string) ([]float32, error) {
@@ -97,20 +97,38 @@ func (c *Client) GerarEmbedding(ctx context.Context, texto string) ([]float32, e
 		return nil, fmt.Errorf("cliente Gemini não inicializado")
 	}
 	
+	// Trunca texto muito longo
+	maxLength := 10000
+	if len(texto) > maxLength {
+		texto = texto[:maxLength]
+	}
+
 	content := genai.NewContentFromText(texto, genai.RoleUser)
-	
-	config := &genai.EmbedContentConfig{}
-	
+
+	// Configurar para gerar embeddings com 768 dimensões
+	outputDim := int32(768)
+	config := &genai.EmbedContentConfig{
+		OutputDimensionality: &outputDim,
+	}
+
 	resp, err := c.geminiClient.Models.EmbedContent(ctx, c.embeddingModel, []*genai.Content{content}, config)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao gerar embedding: %v", err)
 	}
-	
+
 	if len(resp.Embeddings) == 0 {
 		return nil, fmt.Errorf("nenhum embedding foi gerado")
 	}
 
-	return resp.Embeddings[0].Values, nil
+	embedding := resp.Embeddings[0].Values
+
+	// Valida dimensões (sempre 768)
+	if len(embedding) != 768 {
+		log.Printf("AVISO: Embedding de query tem %d dimensões (esperado: 768)", len(embedding))
+		return nil, fmt.Errorf("embedding com dimensões incorretas: %d", len(embedding))
+	}
+
+	return embedding, nil
 }
 
 func (c *Client) BuscaMultiColecaoComTexto(ctx context.Context, colecoes []string, query string, pagina int, porPagina int) (map[string]interface{}, error) {
@@ -258,26 +276,8 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 	}
 	allHits = tombamentoFilteredHits
 
-	// Segundo filtro: Remove documentos da carioca-digital que estão no CSV (filtro existente)
-	filteredHits := make([]hitWrapper, 0, len(allHits))
-	for _, hw := range allHits {
-		shouldKeep := true
-		
-		// Verifica se é da collection carioca-digital e se deve ser excluído
-		if document, ok := hw.raw["document"].(map[string]interface{}); ok {
-			if id, ok := document["id"].(string); ok {
-				// Para busca multi-collection, assumimos que documentos com IDs no CSV são da carioca-digital
-				if c.filterService.ShouldExclude(id) {
-					shouldKeep = false
-				}
-			}
-		}
-		
-		if shouldKeep {
-			filteredHits = append(filteredHits, hw)
-		}
-	}
-	allHits = filteredHits
+	// REMOVED: filterService - CSV-based filtering no longer used
+	// Legacy code that filtered documents from carioca-digital based on CSV
 
 	startIdx := (pagina - 1) * porPagina
 	if startIdx < 0 {
@@ -404,13 +404,9 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 							continue // Pula este documento
 						}
 
-						// Obtém relevância baseada no título
+						// REMOVED: relevanciaService - volumetry-based relevance no longer used
+						// Legacy code that calculated relevance based on CSV volumetry data
 						relevancia := 0
-						if document, ok := hitMap["document"].(map[string]interface{}); ok {
-							if titulo, ok := document["titulo"].(string); ok {
-								relevancia = c.relevanciaService.ObterRelevancia(titulo)
-							}
-						}
 
 						allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
 							relevancia: relevancia,
@@ -434,25 +430,8 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 		return allHitsWithRelevance[i].relevancia > allHitsWithRelevance[j].relevancia
 	})
 
-	// Aplica filtro nos resultados ordenados, removendo documentos da carioca-digital que estão no CSV
-	filteredHitsWithRelevance := make([]hitWithRelevance, 0, len(allHitsWithRelevance))
-	for _, hitWithRel := range allHitsWithRelevance {
-		shouldKeep := true
-		
-		// Verifica se deve ser excluído
-		if document, ok := hitWithRel.hit["document"].(map[string]interface{}); ok {
-			if id, ok := document["id"].(string); ok {
-				if c.filterService.ShouldExclude(id) {
-					shouldKeep = false
-				}
-			}
-		}
-		
-		if shouldKeep {
-			filteredHitsWithRelevance = append(filteredHitsWithRelevance, hitWithRel)
-		}
-	}
-	allHitsWithRelevance = filteredHitsWithRelevance
+	// REMOVED: filterService - CSV-based filtering no longer used
+	// Legacy code that filtered documents from carioca-digital based on CSV
 
 	// Paginação manual dos resultados combinados
 	startIdx := (pagina - 1) * porPagina
@@ -548,13 +527,9 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 			hitsCount = len(hits)
 			for _, h := range hits {
 				if hitMap, ok := h.(map[string]interface{}); ok {
-					// Obtém relevância baseada no título
+					// REMOVED: relevanciaService - volumetry-based relevance no longer used
+					// Legacy code that calculated relevance based on CSV volumetry data
 					relevancia := 0
-					if document, ok := hitMap["document"].(map[string]interface{}); ok {
-						if titulo, ok := document["titulo"].(string); ok {
-							relevancia = c.relevanciaService.ObterRelevancia(titulo)
-						}
-					}
 					
 					allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
 						relevancia: relevancia,
@@ -577,27 +552,8 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 		return allHitsWithRelevance[i].relevancia > allHitsWithRelevance[j].relevancia
 	})
 
-	// Aplica filtro nos resultados ordenados se for collection carioca-digital
-	if colecao == "carioca-digital" {
-		filteredHitsWithRelevance := make([]hitWithRelevance, 0, len(allHitsWithRelevance))
-		for _, hitWithRel := range allHitsWithRelevance {
-			shouldKeep := true
-			
-			// Verifica se deve ser excluído
-			if document, ok := hitWithRel.hit["document"].(map[string]interface{}); ok {
-				if id, ok := document["id"].(string); ok {
-					if c.filterService.ShouldExclude(id) {
-						shouldKeep = false
-					}
-				}
-			}
-			
-			if shouldKeep {
-				filteredHitsWithRelevance = append(filteredHitsWithRelevance, hitWithRel)
-			}
-		}
-		allHitsWithRelevance = filteredHitsWithRelevance
-	}
+	// REMOVED: filterService - CSV-based filtering no longer used
+	// Legacy code that filtered documents from carioca-digital based on CSV
 
 	// Paginação manual dos resultados ordenados
 	startIdx := (pagina - 1) * porPagina
@@ -820,8 +776,10 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 			for _, h := range hits {
 				if hitMap, ok := h.(map[string]interface{}); ok {
 					if document, ok := hitMap["document"].(map[string]interface{}); ok {
-						if titulo, ok := document["titulo"].(string); ok {
-							relevancia := c.relevanciaService.ObterRelevancia(titulo)
+						if _, ok := document["titulo"].(string); ok {
+							// REMOVED: relevanciaService - volumetry-based relevance no longer used
+							// Legacy code that calculated relevance based on CSV volumetry data
+							relevancia := 0
 							relevanciaTotal += relevancia
 							quantidadeServicos++
 						}
@@ -935,6 +893,8 @@ func (c *Client) EnsureCollectionExists(collectionName string) error {
 			return c.createServiceVersionsCollection(collectionName)
 		case "prefrio_services_base":
 			return c.createPrefRioServicesCollection(collectionName)
+		case "hub_search":
+			return c.createHubSearchCollection(collectionName)
 		default:
 			// Para outras collections, assume schema de prefrio_services_base
 			return c.createPrefRioServicesCollection(collectionName)
@@ -1042,6 +1002,58 @@ func (c *Client) createServiceVersionsCollection(collectionName string) error {
 			{Name: "changed_fields_json", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
 		},
 		DefaultSortingField: stringPtr("created_at"),
+		EnableNestedFields:  boolPtr(true),
+	}
+
+	_, err := c.client.Collections().Create(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("erro ao criar collection %s: %v", collectionName, err)
+	}
+
+	log.Printf("Collection %s criada com sucesso", collectionName)
+	return nil
+}
+
+// createHubSearchCollection cria a collection hub_search com o schema apropriado
+func (c *Client) createHubSearchCollection(collectionName string) error {
+	ctx := context.Background()
+
+	schema := &api.CollectionSchema{
+		Name: collectionName,
+		Fields: []api.Field{
+			// Identity
+			{Name: "id", Type: "string", Optional: boolPtr(true)},
+			{Name: "hub_id", Type: "string", Facet: boolPtr(true)},
+			{Name: "source_type", Type: "string", Facet: boolPtr(true)},
+			{Name: "source_collection", Type: "string", Facet: boolPtr(true)},
+			{Name: "source_id", Type: "string", Facet: boolPtr(true)},
+
+			// Segmentation
+			{Name: "portal_tags", Type: "string[]", Facet: boolPtr(true)},
+			{Name: "context_tags", Type: "string[]", Facet: boolPtr(true)},
+
+			// Search Fields
+			{Name: "title", Type: "string", Facet: boolPtr(false)},
+			{Name: "description", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "summary", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "content", Type: "string", Facet: boolPtr(false)},
+
+			// Categorization
+			{Name: "category", Type: "string", Facet: boolPtr(true), Optional: boolPtr(true)},
+			{Name: "subcategories", Type: "string[]", Facet: boolPtr(true), Optional: boolPtr(true)},
+			{Name: "tags", Type: "string[]", Facet: boolPtr(true), Optional: boolPtr(true)},
+
+			// Metadata
+			{Name: "status", Type: "int32", Facet: boolPtr(true)},
+			{Name: "priority", Type: "int32", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "relevance_score", Type: "int32", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "created_at", Type: "int64", Facet: boolPtr(false)},
+			{Name: "updated_at", Type: "int64", Facet: boolPtr(false)},
+
+			// Embeddings (768-dimensional vector for semantic search with gemini-embedding-001)
+			{Name: "embedding", Type: "float[]", NumDim: intPtr(768), Optional: boolPtr(true)},
+		},
+		DefaultSortingField: stringPtr("updated_at"),
 		EnableNestedFields:  boolPtr(true),
 	}
 

@@ -138,12 +138,12 @@ type PrefRioService struct {
 	ResultadoSolicitacao      string                 `json:"resultado_solicitacao" validate:"required,max=20000" typesense:"resultado_solicitacao"`
 	DescricaoCompleta         string                 `json:"descricao_completa" validate:"required,max=20000" typesense:"descricao_completa"`
 	Autor                     string                 `json:"autor" validate:"required,max=20000" typesense:"autor"`
-	DocumentosNecessarios     []string               `json:"documentos_necessarios,omitempty" typesense:"documentos_necessarios,optional"`
-	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty" validate:"max=20000" typesense:"instrucoes_solicitante,optional"`
-	CanaisDigitais            []string               `json:"canais_digitais,omitempty" typesense:"canais_digitais,optional"`
-	CanaisPresenciais         []string               `json:"canais_presenciais,omitempty" typesense:"canais_presenciais,optional"`
-	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty" validate:"max=20000" typesense:"servico_nao_cobre,optional"`
-	LegislacaoRelacionada     []string               `json:"legislacao_relacionada,omitempty" typesense:"legislacao_relacionada,optional"`
+	DocumentosNecessarios     []string               `json:"documentos_necessarios" typesense:"documentos_necessarios,optional"`
+	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante" validate:"max=20000" typesense:"instrucoes_solicitante,optional"`
+	CanaisDigitais            []string               `json:"canais_digitais" typesense:"canais_digitais,optional"`
+	CanaisPresenciais         []string               `json:"canais_presenciais" typesense:"canais_presenciais,optional"`
+	ServicoNaoCobre           string                 `json:"servico_nao_cobre" validate:"max=20000" typesense:"servico_nao_cobre,optional"`
+	LegislacaoRelacionada     []string               `json:"legislacao_relacionada" typesense:"legislacao_relacionada,optional"`
 	TemaGeral                 string                 `json:"tema_geral" validate:"required,max=20000" typesense:"tema_geral"`
 	PublicoEspecifico         []string               `json:"publico_especifico,omitempty" typesense:"publico_especifico,optional"`
 	FixarDestaque             bool                   `json:"fixar_destaque" typesense:"fixar_destaque"`
@@ -156,7 +156,7 @@ type PrefRioService struct {
 	CreatedAt                 int64                  `json:"created_at" typesense:"created_at"`
 	LastUpdate                int64                  `json:"last_update" typesense:"last_update"`
 	SearchContent             string                 `json:"search_content" typesense:"search_content"`
-	Buttons                   []Button               `json:"buttons,omitempty" typesense:"buttons,optional"`
+	Buttons                   []Button               `json:"buttons" typesense:"buttons,optional"`
 	Embedding                 []float64              `json:"embedding,omitempty" typesense:"embedding,optional"`
 }
 
@@ -192,12 +192,12 @@ type PrefRioServiceRequest struct {
 	CustoServico              string                 `json:"custo_servico,omitempty" validate:"max=20000"`
 	ResultadoSolicitacao      string                 `json:"resultado_solicitacao,omitempty" validate:"max=20000"`
 	DescricaoCompleta         string                 `json:"descricao_completa,omitempty" validate:"max=20000"`
-	DocumentosNecessarios     []string               `json:"documentos_necessarios,omitempty"`
-	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante,omitempty" validate:"max=20000"`
-	CanaisDigitais            []string               `json:"canais_digitais,omitempty"`
-	CanaisPresenciais         []string               `json:"canais_presenciais,omitempty"`
-	ServicoNaoCobre           string                 `json:"servico_nao_cobre,omitempty" validate:"max=20000"`
-	LegislacaoRelacionada     []string               `json:"legislacao_relacionada,omitempty"`
+	DocumentosNecessarios     []string               `json:"documentos_necessarios"`
+	InstrucoesSolicitante     string                 `json:"instrucoes_solicitante" validate:"max=20000"`
+	CanaisDigitais            []string               `json:"canais_digitais"`
+	CanaisPresenciais         []string               `json:"canais_presenciais"`
+	ServicoNaoCobre           string                 `json:"servico_nao_cobre" validate:"max=20000"`
+	LegislacaoRelacionada     []string               `json:"legislacao_relacionada"`
 	TemaGeral                 string                 `json:"tema_geral" validate:"required,max=20000"`
 	PublicoEspecifico         []string               `json:"publico_especifico" validate:"required,min=1"`
 	FixarDestaque             bool                   `json:"fixar_destaque"`
@@ -207,7 +207,7 @@ type PrefRioServiceRequest struct {
 	Agents                    *AgentsConfig          `json:"agents,omitempty"`
 	ExtraFields               map[string]interface{} `json:"extra_fields,omitempty"`
 	Status                    int                    `json:"status" validate:"min=0,max=1"`
-	Buttons                   []Button               `json:"buttons,omitempty"`
+	Buttons                   []Button               `json:"buttons"`
 }
 
 // PrefRioServiceResponse representa a resposta de listagem de serviços

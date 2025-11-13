@@ -18,4 +18,5 @@ var CategoriasValidas = []string{
 	"Licenças",
 	"Esportes",
 	"Animais",
+	"Astronomia",
 } 
