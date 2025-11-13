@@ -1,13 +1,19 @@
 package routes
 
 import (
+	"context"
+	"fmt"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/prefeitura-rio/app-busca-search/internal/api/handlers"
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
 	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
+	"github.com/prefeitura-rio/app-busca-search/internal/services"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"google.golang.org/genai"
 )
 
 func SetupRouter(cfg *config.Config) *gin.Engine {
@@ -17,20 +23,45 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 	typesenseClient := typesense.NewClient(cfg)
 
-	buscaHandler := handlers.NewBuscaHandler(typesenseClient)
+	// Initialize Gemini client
+	ctx := context.Background()
+	geminiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey: cfg.GeminiAPIKey,
+	})
+	if err != nil {
+		println("Aviso: Gemini client não inicializado, busca vetorial desabilitada:", err.Error())
+		geminiClient = nil
+	}
+
+	// Initialize cache service (500 entries, cleanup a cada 5min)
+	cache := services.NewLRUCache(500)
+	cache.StartCleanupRoutine(5 * time.Minute)
+
+	// Initialize handlers
 	adminHandler := handlers.NewAdminHandler(typesenseClient)
 	tombamentoHandler := handlers.NewTombamentoHandler(typesenseClient)
 	versionHandler := handlers.NewVersionHandler(typesenseClient)
 
+	// Initialize search service (direct search)
+	typesenseURL := fmt.Sprintf("%s://%s:%s", cfg.TypesenseProtocol, cfg.TypesenseHost, cfg.TypesensePort)
+	searchService := services.NewSearchService(
+		typesenseClient.GetClient(),
+		geminiClient,
+		cfg.GeminiEmbeddingModel,
+		cache,
+		typesenseURL,
+		cfg.TypesenseAPIKey,
+	)
+	searchHandler := handlers.NewSearchHandler(searchService)
+
 	api := r.Group("/api/v1")
 	{
-		api.GET("/busca-hibrida-multi", buscaHandler.BuscaMultiColecao)
-		api.GET("/categoria/:collections", buscaHandler.BuscaPorCategoria)
-		api.GET("/documento/:collection/:id", buscaHandler.BuscaPorID)
-		api.GET("/categorias-relevancia", buscaHandler.CategoriasRelevancia)
+		// Unified search endpoints
+		api.GET("/search", searchHandler.Search)
+		api.GET("/search/:id", searchHandler.GetDocumentByID)
 	}
 
-	// Rotas administrativas com autenticação JWT (sem validação de roles)
+	// Rotas administrativas com autenticação JWT
 	admin := api.Group("/admin")
 	admin.Use(middlewares.JWTAuthMiddleware()) // Extrai dados do JWT
 	admin.Use(middlewares.RequireJWTAuth())    // Verifica apenas se está autenticado

@@ -17,3 +17,7 @@ tidy:
 
 test:
     go test ./...
+
+# Frontend dev server
+frontend:
+    cd frontend && npm run dev

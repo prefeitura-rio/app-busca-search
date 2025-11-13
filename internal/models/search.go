@@ -1,0 +1,61 @@
+package models
+
+// SearchType define os tipos de busca disponíveis
+type SearchType string
+
+const (
+	SearchTypeKeyword  SearchType = "keyword"
+	SearchTypeSemantic SearchType = "semantic"
+	SearchTypeHybrid   SearchType = "hybrid"
+	SearchTypeAI       SearchType = "ai"
+)
+
+// SearchRequest representa uma requisição de busca
+type SearchRequest struct {
+	Query           string     `form:"q" binding:"required"`
+	Type            SearchType `form:"type" binding:"required"`
+	Page            int        `form:"page"`
+	PerPage         int        `form:"per_page"`
+	IncludeInactive bool       `form:"include_inactive"`
+	Alpha           float64    `form:"alpha"` // Para hybrid (default 0.3)
+}
+
+// ServiceDocument representa um documento de serviço retornado pela busca
+type ServiceDocument struct {
+	ID          string                 `json:"id"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Category    string                 `json:"category"`
+	Status      int32                  `json:"status"`
+	CreatedAt   int64                  `json:"created_at"`
+	UpdatedAt   int64                  `json:"updated_at"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
+// SearchResponse representa a resposta de uma busca
+type SearchResponse struct {
+	Results    []*ServiceDocument     `json:"results"`
+	TotalCount int                    `json:"total_count"`
+	Page       int                    `json:"page"`
+	PerPage    int                    `json:"per_page"`
+	SearchType SearchType             `json:"search_type"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"` // Para AI search
+}
+
+// AISearchMetrics métricas do AI Agent Search
+type AISearchMetrics struct {
+	GeminiCalls    int     `json:"gemini_calls"`
+	RerankExecuted bool    `json:"rerank_executed"`
+	TotalTime      float64 `json:"total_time_ms"`
+}
+
+// QueryAnalysis análise estruturada da query pelo LLM
+type QueryAnalysis struct {
+	Intent         string   `json:"intent"`          // buscar_servico, listar_categoria, esclarecer_duvida
+	Keywords       []string `json:"keywords"`        // palavras-chave extraídas
+	Categories     []string `json:"categories"`      // categorias inferidas
+	RefinedQueries []string `json:"refined_queries"` // max 2 variações da query
+	SearchStrategy string   `json:"search_strategy"` // hybrid, semantic, keyword
+	Confidence     float64  `json:"confidence"`      // 0-1
+	PortalTags     []string `json:"portal_tags"`     // portal inferido
+}
