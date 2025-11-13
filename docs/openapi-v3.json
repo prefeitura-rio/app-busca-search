@@ -1616,25 +1616,16 @@
         ]
       }
     },
-    "/api/v1/busca-hibrida-multi": {
+    "/api/v1/search": {
       "get": {
-        "description": "Realiza uma busca hibrida em varias colecoes combinando texto e embeddings",
+        "description": "Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente)",
         "tags": [
-          "busca"
+          "search"
         ],
-        "summary": "Busca hibrida em varias colecoes",
+        "summary": "Busca unificada de serviços públicos",
         "parameters": [
           {
-            "description": "Lista de colecoes separadas por virgula",
-            "name": "collections",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Termo de busca",
+            "description": "Texto da busca",
             "name": "q",
             "in": "query",
             "required": true,
@@ -1643,7 +1634,16 @@
             }
           },
           {
-            "description": "Pagina",
+            "description": "Tipo de busca: keyword, semantic, hybrid ou ai",
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da página (mínimo: 1)",
             "name": "page",
             "in": "query",
             "schema": {
@@ -1652,13 +1652,31 @@
             }
           },
           {
-            "description": "Resultados por pagina",
+            "description": "Resultados por página (máximo: 100)",
             "name": "per_page",
             "in": "query",
             "schema": {
               "type": "integer",
               "default": 10
             }
+          },
+          {
+            "description": "Incluir serviços inativos (status != 1)",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Alpha para busca hybrid (0-1, default: 0.3)",
+            "name": "alpha",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "default": 0.3
+            }
           }
         ],
         "responses": {
@@ -1667,8 +1685,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/models.SearchResponse"
                 }
               }
             }
@@ -1707,180 +1724,16 @@
         ]
       }
     },
-    "/api/v1/categoria/{collections}": {
+    "/api/v1/search/{id}": {
       "get": {
-        "description": "Busca documentos de uma categoria especifica em uma ou multiplas colecoes retornando informacoes completas",
+        "description": "Retorna os detalhes completos de um serviço específico",
         "tags": [
-          "busca"
+          "search"
         ],
-        "summary": "Busca documentos por categoria",
+        "summary": "Busca um serviço por ID",
         "parameters": [
           {
-            "description": "Nome da colecao ou lista de colecoes separadas por virgula",
-            "name": "collections",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Categoria dos documentos",
-            "name": "categoria",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Pagina",
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            }
-          },
-          {
-            "description": "Resultados por pagina",
-            "name": "per_page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 10
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/categorias-relevancia": {
-      "get": {
-        "description": "Retorna todas as categorias ordenadas por relevancia baseada na volumetria dos servicos",
-        "tags": [
-          "busca"
-        ],
-        "summary": "Busca categorias ordenadas por relevancia",
-        "parameters": [
-          {
-            "description": "Lista de colecoes separadas por virgula",
-            "name": "collections",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/documento/{collection}/{id}": {
-      "get": {
-        "description": "Busca um documento especifico por ID retornando todos os campos exceto embedding e campos normalizados",
-        "tags": [
-          "busca"
-        ],
-        "summary": "Busca documento por ID",
-        "parameters": [
-          {
-            "description": "Nome da colecao",
-            "name": "collection",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "ID do documento",
+            "description": "ID do serviço",
             "name": "id",
             "in": "path",
             "required": true,
@@ -1895,21 +1748,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": "string"
-                  }
+                  "$ref": "#/components/schemas/models.ServiceDocument"
                 }
               }
             }
@@ -2299,6 +2138,79 @@
           "to_version": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "models.SearchResponse": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "description": "Para AI search",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ServiceDocument"
+            }
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/models.SearchType"
+          },
+          "total_count": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.SearchType": {
+        "type": "string",
+        "enum": [
+          "keyword",
+          "semantic",
+          "hybrid",
+          "ai"
+        ],
+        "x-enum-varnames": [
+          "SearchTypeKeyword",
+          "SearchTypeSemantic",
+          "SearchTypeHybrid",
+          "SearchTypeAI"
+        ]
+      },
+      "models.ServiceDocument": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "status": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "integer"
           }
         }
       },
