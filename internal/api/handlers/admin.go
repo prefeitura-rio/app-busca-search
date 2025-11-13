@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
@@ -49,8 +50,11 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		return
 	}
 
+	serviceID := uuid.New().String()
+
 	// Converte para modelo completo
 	service := &models.PrefRioService{
+		ID:                        serviceID,
 		NomeServico:               request.NomeServico,
 		OrgaoGestor:               request.OrgaoGestor,
 		Resumo:                    request.Resumo,
