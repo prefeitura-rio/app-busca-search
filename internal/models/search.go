@@ -10,14 +10,23 @@ const (
 	SearchTypeAI       SearchType = "ai"
 )
 
+// ScoreThreshold representa thresholds mínimos de score por tipo de busca
+type ScoreThreshold struct {
+	Keyword  *float64 `form:"threshold_keyword" json:"keyword,omitempty"`
+	Semantic *float64 `form:"threshold_semantic" json:"semantic,omitempty"`
+	Hybrid   *float64 `form:"threshold_hybrid" json:"hybrid,omitempty"`
+}
+
 // SearchRequest representa uma requisição de busca
 type SearchRequest struct {
-	Query           string     `form:"q" binding:"required"`
-	Type            SearchType `form:"type" binding:"required"`
-	Page            int        `form:"page"`
-	PerPage         int        `form:"per_page"`
-	IncludeInactive bool       `form:"include_inactive"`
-	Alpha           float64    `form:"alpha"` // Para hybrid (default 0.3)
+	Query               string          `form:"q" binding:"required"`
+	Type                SearchType      `form:"type" binding:"required"`
+	Page                int             `form:"page"`
+	PerPage             int             `form:"per_page"`
+	IncludeInactive     bool            `form:"include_inactive"`
+	Alpha               float64         `form:"alpha"` // Para hybrid (default 0.3)
+	ScoreThreshold      *ScoreThreshold `form:"score_threshold,omitempty"`
+	ExclusiveForAgents  *bool           `form:"exclusive_for_agents"`
 }
 
 // ServiceDocument representa um documento de serviço retornado pela busca

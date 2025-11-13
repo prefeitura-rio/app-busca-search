@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +33,10 @@ func NewSearchHandler(searchService *services.SearchService) *SearchHandler {
 // @Param per_page query int false "Resultados por página (máximo: 100)" default(10)
 // @Param include_inactive query bool false "Incluir serviços inativos (status != 1)" default(false)
 // @Param alpha query number false "Alpha para busca hybrid (0-1, default: 0.3)" default(0.3)
+// @Param threshold_keyword query number false "Score mínimo para busca keyword (0-1, filtra text_match normalizado)"
+// @Param threshold_semantic query number false "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)"
+// @Param threshold_hybrid query number false "Score mínimo para busca hybrid (0-1, filtra score híbrido combinado)"
+// @Param exclusive_for_agents query bool false "Se true, retorna apenas serviços marcados como exclusivos para agentes IA" default(false)
 // @Success 200 {object} models.SearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -46,6 +51,32 @@ func (h *SearchHandler) Search(c *gin.Context) {
 			"details": err.Error(),
 		})
 		return
+	}
+
+	// Parse manual de threshold parameters (struct aninhado)
+	if c.Query("threshold_keyword") != "" || c.Query("threshold_semantic") != "" || c.Query("threshold_hybrid") != "" {
+		req.ScoreThreshold = &models.ScoreThreshold{}
+
+		if val := c.Query("threshold_keyword"); val != "" {
+			var f float64
+			if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
+				req.ScoreThreshold.Keyword = &f
+			}
+		}
+
+		if val := c.Query("threshold_semantic"); val != "" {
+			var f float64
+			if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
+				req.ScoreThreshold.Semantic = &f
+			}
+		}
+
+		if val := c.Query("threshold_hybrid"); val != "" {
+			var f float64
+			if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
+				req.ScoreThreshold.Hybrid = &f
+			}
+		}
 	}
 
 	// Validar tipo de busca

@@ -113,9 +113,9 @@ func (ss *SearchService) KeywordSearch(ctx context.Context, req *models.SearchRe
 		ExhaustiveSearch:        boolPtr(true),
 	}
 
-	// Filtro de status (apenas publicados, a menos que include_inactive)
-	if !req.IncludeInactive {
-		searchParams.FilterBy = stringPtr("status:=1")
+	// Aplicar filtros (status, exclusive_for_agents)
+	if filterBy := buildFilterBy(req); filterBy != "" {
+		searchParams.FilterBy = stringPtr(filterBy)
 	}
 
 	// Executar busca
@@ -130,18 +130,26 @@ func (ss *SearchService) KeywordSearch(ctx context.Context, req *models.SearchRe
 		return nil, err
 	}
 
-	totalCount := 0
-	if result.Found != nil {
-		totalCount = *result.Found
-	}
+	// Aplicar filtro de score threshold
+	filteredDocs, filterMeta := ss.applyScoreThreshold(docs, req, models.SearchTypeKeyword)
 
-	return &models.SearchResponse{
-		Results:    docs,
+	// Total count ajustado após filtragem
+	totalCount := len(filteredDocs)
+
+	response := &models.SearchResponse{
+		Results:    filteredDocs,
 		TotalCount: totalCount,
 		Page:       req.Page,
 		PerPage:    req.PerPage,
 		SearchType: models.SearchTypeKeyword,
-	}, nil
+	}
+
+	// Adicionar metadata de filtragem se aplicável
+	if filterMeta != nil {
+		response.Metadata = filterMeta
+	}
+
+	return response, nil
 }
 
 // ============================================================================
@@ -225,9 +233,9 @@ func (ss *SearchService) executeVectorSearch(
 		"page":         req.Page,
 	}
 
-	// Filtro de status
-	if !req.IncludeInactive {
-		search["filter_by"] = "status:=1"
+	// Aplicar filtros (status, exclusive_for_agents)
+	if filterBy := buildFilterBy(req); filterBy != "" {
+		search["filter_by"] = filterBy
 	}
 
 	// Se alpha < 1.0, incluir busca textual híbrida
@@ -306,23 +314,32 @@ func (ss *SearchService) executeVectorSearch(
 		return nil, err
 	}
 
-	totalCount := 0
-	if result.Found != nil {
-		totalCount = *result.Found
-	}
-
+	// Determinar tipo de busca
 	searchType := models.SearchTypeSemantic
 	if alpha < 1.0 {
 		searchType = models.SearchTypeHybrid
 	}
 
-	return &models.SearchResponse{
-		Results:    docs,
+	// Aplicar filtro de score threshold
+	filteredDocs, filterMeta := ss.applyScoreThreshold(docs, req, searchType)
+
+	// Total count ajustado após filtragem
+	totalCount := len(filteredDocs)
+
+	response := &models.SearchResponse{
+		Results:    filteredDocs,
 		TotalCount: totalCount,
 		Page:       req.Page,
 		PerPage:    req.PerPage,
 		SearchType: searchType,
-	}, nil
+	}
+
+	// Adicionar metadata de filtragem se aplicável
+	if filterMeta != nil {
+		response.Metadata = filterMeta
+	}
+
+	return response, nil
 }
 
 // ============================================================================
@@ -606,6 +623,15 @@ func (ss *SearchService) transformResults(result *api.SearchResult) ([]*models.S
 		}
 
 		doc := ss.transformDocument(*hit.Document)
+
+		// Adicionar scores ao metadata para filtragem posterior
+		if hit.TextMatch != nil {
+			doc.Metadata["text_match"] = *hit.TextMatch
+		}
+		if hit.VectorDistance != nil {
+			doc.Metadata["vector_distance"] = *hit.VectorDistance
+		}
+
 		docs = append(docs, doc)
 	}
 
@@ -696,3 +722,123 @@ func getInt64(m map[string]interface{}, key string) int64 {
 func stringPtr(s string) *string { return &s }
 func intPtr(i int) *int          { return &i }
 func boolPtr(b bool) *bool       { return &b }
+
+// buildFilterBy constrói a expressão de filtro baseada no SearchRequest
+func buildFilterBy(req *models.SearchRequest) string {
+	var filters []string
+
+	// Filtro de status (apenas publicados, a menos que include_inactive)
+	if !req.IncludeInactive {
+		filters = append(filters, "status:=1")
+	}
+
+	// Filtro exclusive_for_agents
+	if req.ExclusiveForAgents != nil && *req.ExclusiveForAgents {
+		filters = append(filters, "agents.exclusive_for_agents:=true")
+	}
+
+	if len(filters) == 0 {
+		return ""
+	}
+
+	return strings.Join(filters, " && ")
+}
+
+// applyScoreThreshold filtra resultados baseado nos thresholds configurados
+func (ss *SearchService) applyScoreThreshold(
+	docs []*models.ServiceDocument,
+	req *models.SearchRequest,
+	searchType models.SearchType,
+) ([]*models.ServiceDocument, map[string]interface{}) {
+	// Se não há threshold configurado, retornar tudo
+	if req.ScoreThreshold == nil {
+		return docs, nil
+	}
+
+	// Determinar qual threshold usar baseado no tipo de busca
+	var threshold *float64
+	switch searchType {
+	case models.SearchTypeKeyword:
+		threshold = req.ScoreThreshold.Keyword
+	case models.SearchTypeSemantic:
+		threshold = req.ScoreThreshold.Semantic
+	case models.SearchTypeHybrid:
+		threshold = req.ScoreThreshold.Hybrid
+	default:
+		// AI search: não aplicar threshold (já foi aplicado na busca delegada)
+		return docs, nil
+	}
+
+	// Se threshold não está definido para este tipo, retornar tudo
+	if threshold == nil {
+		return docs, nil
+	}
+
+	minThreshold := *threshold
+	originalCount := len(docs)
+	filtered := make([]*models.ServiceDocument, 0, len(docs))
+
+	for _, doc := range docs {
+		passes := false
+
+		switch searchType {
+		case models.SearchTypeKeyword:
+			// Para keyword: verificar text_match
+			if tm, ok := doc.Metadata["text_match"].(int64); ok {
+				// Normalizar text_match para 0-1 (assumindo max de 100)
+				normalizedScore := float64(tm) / 100.0
+				passes = normalizedScore >= minThreshold
+			} else if tm, ok := doc.Metadata["text_match"].(float64); ok {
+				passes = tm >= minThreshold
+			}
+
+		case models.SearchTypeSemantic:
+			// Para semantic: verificar vector_distance (menor é melhor)
+			// Converter distância para similaridade: similarity = 1 - distance
+			if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
+				similarity := 1.0 - vd
+				passes = similarity >= minThreshold
+			}
+
+		case models.SearchTypeHybrid:
+			// Para hybrid: calcular score híbrido
+			alpha := 0.3
+			if req.Alpha > 0 && req.Alpha <= 1.0 {
+				alpha = req.Alpha
+			}
+
+			var textScore, vectorScore float64
+
+			// Extrair text_match e normalizar
+			if tm, ok := doc.Metadata["text_match"].(int64); ok {
+				textScore = float64(tm) / 100.0
+			} else if tm, ok := doc.Metadata["text_match"].(float64); ok {
+				textScore = tm / 100.0
+			}
+
+			// Extrair vector_distance e converter para similarity
+			if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
+				vectorScore = 1.0 - vd
+			}
+
+			// Calcular score híbrido: (1-alpha)*text + alpha*vector
+			hybridScore := (1.0-alpha)*textScore + alpha*vectorScore
+			passes = hybridScore >= minThreshold
+		}
+
+		if passes {
+			filtered = append(filtered, doc)
+		}
+	}
+
+	// Metadata sobre a filtragem
+	filterMeta := map[string]interface{}{
+		"score_threshold_applied": true,
+		"original_count":          originalCount,
+		"filtered_count":          len(filtered),
+		"threshold_value":         minThreshold,
+		"search_type":             string(searchType),
+	}
+
+	return filtered, filterMeta
+}
