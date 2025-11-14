@@ -36,7 +36,7 @@ func NewSearchHandler(searchService *services.SearchService) *SearchHandler {
 // @Param threshold_keyword query number false "Score mínimo para busca keyword (0-1, filtra text_match normalizado)"
 // @Param threshold_semantic query number false "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)"
 // @Param threshold_hybrid query number false "Score mínimo para busca hybrid (0-1, filtra score híbrido combinado)"
-// @Param exclusive_for_agents query bool false "Se true, retorna apenas serviços marcados como exclusivos para agentes IA" default(false)
+// @Param exclude_agent_exclusive query bool false "Se true, exclui serviços exclusivos para agentes IA (mostra apenas serviços para humanos)" default(false)
 // @Success 200 {object} models.SearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string

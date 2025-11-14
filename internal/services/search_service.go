@@ -732,9 +732,10 @@ func buildFilterBy(req *models.SearchRequest) string {
 		filters = append(filters, "status:=1")
 	}
 
-	// Filtro exclusive_for_agents
-	if req.ExclusiveForAgents != nil && *req.ExclusiveForAgents {
-		filters = append(filters, "agents.exclusive_for_agents:=true")
+	// Filtro exclude_agent_exclusive
+	// Se true, exclui serviços exclusivos para agentes (mostra apenas para humanos)
+	if req.ExcludeAgentExclusive != nil && *req.ExcludeAgentExclusive {
+		filters = append(filters, "agents.exclusive_for_agents:=false")
 	}
 
 	if len(filters) == 0 {
@@ -785,18 +786,24 @@ func (ss *SearchService) applyScoreThreshold(
 		case models.SearchTypeKeyword:
 			// Para keyword: verificar text_match
 			if tm, ok := doc.Metadata["text_match"].(int64); ok {
-				// Normalizar text_match para 0-1 (assumindo max de 100)
+				// Normalizar text_match para 0-1 (Typesense usa escala 0-100+)
 				normalizedScore := float64(tm) / 100.0
 				passes = normalizedScore >= minThreshold
 			} else if tm, ok := doc.Metadata["text_match"].(float64); ok {
-				passes = tm >= minThreshold
+				// Fallback: se vier como float64 (ex: JSON unmarshaling), normalizar também
+				normalizedScore := tm / 100.0
+				passes = normalizedScore >= minThreshold
 			}
 
 		case models.SearchTypeSemantic:
 			// Para semantic: verificar vector_distance (menor é melhor)
-			// Converter distância para similaridade: similarity = 1 - distance
-			if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
-				similarity := 1.0 - vd
+			// Converter cosine distance [0,2] para similarity [1,0]
+			if vd, ok := doc.Metadata["vector_distance"].(float32); ok {
+				similarity := 1.0 - (float64(vd) / 2.0)
+				passes = similarity >= minThreshold
+			} else if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
+				// Fallback para float64 (caso venha de JSON unmarshaling)
+				similarity := 1.0 - (vd / 2.0)
 				passes = similarity >= minThreshold
 			}
 
@@ -809,16 +816,21 @@ func (ss *SearchService) applyScoreThreshold(
 
 			var textScore, vectorScore float64
 
-			// Extrair text_match e normalizar
+			// Extrair text_match e normalizar (Typesense usa escala 0-100+)
 			if tm, ok := doc.Metadata["text_match"].(int64); ok {
 				textScore = float64(tm) / 100.0
 			} else if tm, ok := doc.Metadata["text_match"].(float64); ok {
+				// Fallback: se vier como float64, normalizar também
 				textScore = tm / 100.0
 			}
 
 			// Extrair vector_distance e converter para similarity
-			if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
-				vectorScore = 1.0 - vd
+			// Normalizar cosine distance [0,2] para similarity [1,0]
+			if vd, ok := doc.Metadata["vector_distance"].(float32); ok {
+				vectorScore = 1.0 - (float64(vd) / 2.0)
+			} else if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
+				// Fallback para float64 (caso venha de JSON unmarshaling)
+				vectorScore = 1.0 - (vd / 2.0)
 			}
 
 			// Calcular score híbrido: (1-alpha)*text + alpha*vector
