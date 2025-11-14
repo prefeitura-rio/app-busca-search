@@ -7,17 +7,20 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/prefeitura-rio/app-busca-search/internal/services"
+	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 )
 
 // SearchHandler gerencia endpoints de busca
 type SearchHandler struct {
-	searchService *services.SearchService
+	searchService   *services.SearchService
+	typesenseClient *typesense.Client
 }
 
 // NewSearchHandler cria um novo handler de busca
-func NewSearchHandler(searchService *services.SearchService) *SearchHandler {
+func NewSearchHandler(searchService *services.SearchService, typesenseClient *typesense.Client) *SearchHandler {
 	return &SearchHandler{
-		searchService: searchService,
+		searchService:   searchService,
+		typesenseClient: typesenseClient,
 	}
 }
 
@@ -116,13 +119,13 @@ func (h *SearchHandler) Search(c *gin.Context) {
 }
 
 // GetDocumentByID godoc
-// @Summary Busca um serviço por ID
-// @Description Retorna os detalhes completos de um serviço específico
+// @Summary Busca um serviço por ID (UUID)
+// @Description Retorna os detalhes completos de um serviço específico através de busca direta por UUID no Typesense
 // @Tags search
 // @Accept json
 // @Produce json
-// @Param id path string true "ID do serviço"
-// @Success 200 {object} models.ServiceDocument
+// @Param id path string true "UUID do serviço" example(cffe0736-80a6-46fe-ace6-3cebb4d262ea)
+// @Success 200 {object} models.PrefRioService
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/search/{id} [get]
@@ -135,30 +138,15 @@ func (h *SearchHandler) GetDocumentByID(c *gin.Context) {
 		return
 	}
 
-	// Buscar por ID usando keyword search (mais rápido que Retrieve para este caso)
-	req := &models.SearchRequest{
-		Query:           id,
-		Type:            models.SearchTypeKeyword,
-		Page:            1,
-		PerPage:         1,
-		IncludeInactive: true, // Permitir buscar inativos por ID
-	}
-
-	result, err := h.searchService.Search(c.Request.Context(), req)
+	// Busca direta por ID no Typesense (retrieval por chave primária)
+	doc, err := h.typesenseClient.GetPrefRioService(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Erro ao buscar serviço",
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Serviço não encontrado",
 			"details": err.Error(),
 		})
 		return
 	}
 
-	if len(result.Results) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Serviço não encontrado",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, result.Results[0])
+	c.JSON(http.StatusOK, doc)
 }

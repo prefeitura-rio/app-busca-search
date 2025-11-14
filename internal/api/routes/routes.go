@@ -52,7 +52,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		typesenseURL,
 		cfg.TypesenseAPIKey,
 	)
-	searchHandler := handlers.NewSearchHandler(searchService)
+	searchHandler := handlers.NewSearchHandler(searchService, typesenseClient)
 
 	// Initialize category services
 	popularityService := services.NewPopularityService()
