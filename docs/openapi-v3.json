@@ -1677,6 +1677,39 @@
               "type": "number",
               "default": 0.3
             }
+          },
+          {
+            "description": "Score mínimo para busca keyword (0-1, filtra text_match normalizado)",
+            "name": "threshold_keyword",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)",
+            "name": "threshold_semantic",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo para busca hybrid (0-1, filtra score híbrido combinado)",
+            "name": "threshold_hybrid",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Se true, retorna apenas serviços marcados como exclusivos para agentes IA",
+            "name": "exclusive_for_agents",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
