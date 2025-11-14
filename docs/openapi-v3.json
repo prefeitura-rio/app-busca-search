@@ -1703,8 +1703,8 @@
             }
           },
           {
-            "description": "Se true, retorna apenas serviços marcados como exclusivos para agentes IA",
-            "name": "exclusive_for_agents",
+            "description": "Se true, exclui serviços exclusivos para agentes IA (mostra apenas serviços para humanos)",
+            "name": "exclude_agent_exclusive",
             "in": "query",
             "schema": {
               "type": "boolean",
