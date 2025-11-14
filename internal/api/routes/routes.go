@@ -54,11 +54,19 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	)
 	searchHandler := handlers.NewSearchHandler(searchService)
 
+	// Initialize category services
+	popularityService := services.NewPopularityService()
+	categoryService := services.NewCategoryService(typesenseClient.GetClient(), popularityService)
+	categoryHandler := handlers.NewCategoryHandler(categoryService)
+
 	api := r.Group("/api/v1")
 	{
 		// Unified search endpoints
 		api.GET("/search", searchHandler.Search)
 		api.GET("/search/:id", searchHandler.GetDocumentByID)
+
+		// Category endpoints
+		api.GET("/categories", categoryHandler.GetCategories)
 	}
 
 	// Rotas administrativas com autenticação JWT
