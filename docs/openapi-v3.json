@@ -1887,14 +1887,15 @@
     },
     "/api/v1/search/{id}": {
       "get": {
-        "description": "Retorna os detalhes completos de um serviço específico",
+        "description": "Retorna os detalhes completos de um serviço específico através de busca direta por UUID no Typesense",
         "tags": [
           "search"
         ],
-        "summary": "Busca um serviço por ID",
+        "summary": "Busca um serviço por ID (UUID)",
         "parameters": [
           {
-            "description": "ID do serviço",
+            "example": "cffe0736-80a6-46fe-ace6-3cebb4d262ea",
+            "description": "UUID do serviço",
             "name": "id",
             "in": "path",
             "required": true,
@@ -1909,7 +1910,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models.ServiceDocument"
+                  "$ref": "#/components/schemas/models.PrefRioService"
                 }
               }
             }
