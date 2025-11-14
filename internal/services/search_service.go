@@ -751,105 +751,193 @@ func (ss *SearchService) applyScoreThreshold(
 	req *models.SearchRequest,
 	searchType models.SearchType,
 ) ([]*models.ServiceDocument, map[string]interface{}) {
-	// Se não há threshold configurado, retornar tudo
-	if req.ScoreThreshold == nil {
+	// Se não há documentos, retornar vazio
+	if len(docs) == 0 {
 		return docs, nil
 	}
 
 	// Determinar qual threshold usar baseado no tipo de busca
 	var threshold *float64
+	var thresholdType string
 	switch searchType {
 	case models.SearchTypeKeyword:
-		threshold = req.ScoreThreshold.Keyword
+		if req.ScoreThreshold != nil {
+			threshold = req.ScoreThreshold.Keyword
+		}
+		thresholdType = "keyword"
 	case models.SearchTypeSemantic:
-		threshold = req.ScoreThreshold.Semantic
+		if req.ScoreThreshold != nil {
+			threshold = req.ScoreThreshold.Semantic
+		}
+		thresholdType = "semantic"
 	case models.SearchTypeHybrid:
-		threshold = req.ScoreThreshold.Hybrid
+		if req.ScoreThreshold != nil {
+			threshold = req.ScoreThreshold.Hybrid
+		}
+		thresholdType = "hybrid"
 	default:
 		// AI search: não aplicar threshold (já foi aplicado na busca delegada)
-		return docs, nil
+		thresholdType = "none"
 	}
 
-	// Se threshold não está definido para este tipo, retornar tudo
-	if threshold == nil {
-		return docs, nil
+	// Calcular alpha para hybrid
+	alpha := 0.3
+	if searchType == models.SearchTypeHybrid && req.Alpha > 0 && req.Alpha <= 1.0 {
+		alpha = req.Alpha
 	}
 
-	minThreshold := *threshold
+	// FASE 1: Calcular min/max para normalização de text_match (se necessário)
+	var minTextMatch, maxTextMatch int64
+	needsTextNormalization := searchType == models.SearchTypeKeyword || searchType == models.SearchTypeHybrid
+
+	if needsTextNormalization {
+		minTextMatch = int64(9223372036854775807) // max int64
+		maxTextMatch = int64(0)
+
+		for _, doc := range docs {
+			var tm int64
+			if tmInt, ok := doc.Metadata["text_match"].(int64); ok {
+				tm = tmInt
+			} else if tmFloat, ok := doc.Metadata["text_match"].(float64); ok {
+				tm = int64(tmFloat)
+			} else {
+				continue
+			}
+
+			if tm < minTextMatch {
+				minTextMatch = tm
+			}
+			if tm > maxTextMatch {
+				maxTextMatch = tm
+			}
+		}
+	}
+
+	// FASE 2: Processar cada documento, calcular scores e aplicar threshold
 	originalCount := len(docs)
 	filtered := make([]*models.ServiceDocument, 0, len(docs))
 
 	for _, doc := range docs {
-		passes := false
+		var normalizedScore float64
+		passes := true // Por padrão, passa (se não houver threshold)
+		scoreInfo := &models.ScoreInfo{
+			ThresholdApplied: thresholdType,
+			PassedThreshold:  true,
+		}
+
+		if threshold != nil {
+			scoreInfo.ThresholdValue = threshold
+		}
 
 		switch searchType {
 		case models.SearchTypeKeyword:
-			// Para keyword: verificar text_match
-			if tm, ok := doc.Metadata["text_match"].(int64); ok {
-				// Normalizar text_match para 0-1 (Typesense usa escala 0-100+)
-				normalizedScore := float64(tm) / 100.0
-				passes = normalizedScore >= minThreshold
-			} else if tm, ok := doc.Metadata["text_match"].(float64); ok {
-				// Fallback: se vier como float64 (ex: JSON unmarshaling), normalizar também
-				normalizedScore := tm / 100.0
-				passes = normalizedScore >= minThreshold
+			// Para keyword: normalizar text_match usando min-max normalization
+			// text_match do Typesense são valores absolutos unbounded (podem ser bilhões/trilhões)
+			// Normalizamos relativamente ao conjunto de resultados atual
+			var tm int64
+			if tmInt, ok := doc.Metadata["text_match"].(int64); ok {
+				tm = tmInt
+			} else if tmFloat, ok := doc.Metadata["text_match"].(float64); ok {
+				tm = int64(tmFloat)
+			}
+
+			// Min-max normalization: (value - min) / (max - min)
+			// Se max == min, todos têm o mesmo score (normalizar para 1.0)
+			if maxTextMatch > minTextMatch {
+				normalizedScore = float64(tm-minTextMatch) / float64(maxTextMatch-minTextMatch)
+			} else {
+				normalizedScore = 1.0
+			}
+
+			scoreInfo.TextMatchNormalized = &normalizedScore
+
+			if threshold != nil {
+				passes = normalizedScore >= *threshold
 			}
 
 		case models.SearchTypeSemantic:
-			// Para semantic: verificar vector_distance (menor é melhor)
-			// Converter cosine distance [0,2] para similarity [1,0]
-			if vd, ok := doc.Metadata["vector_distance"].(float32); ok {
-				similarity := 1.0 - (float64(vd) / 2.0)
-				passes = similarity >= minThreshold
-			} else if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
-				// Fallback para float64 (caso venha de JSON unmarshaling)
-				similarity := 1.0 - (vd / 2.0)
-				passes = similarity >= minThreshold
+			// Para semantic: converter vector_distance [0,2] para similarity [1,0]
+			// Menor distance = maior similarity
+			var vd float64
+			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
+				vd = float64(vdFloat32)
+			} else if vdFloat64, ok := doc.Metadata["vector_distance"].(float64); ok {
+				vd = vdFloat64
+			}
+
+			// Converter cosine distance para similarity
+			similarity := 1.0 - (vd / 2.0)
+			scoreInfo.VectorSimilarity = &similarity
+			normalizedScore = similarity
+
+			if threshold != nil {
+				passes = normalizedScore >= *threshold
 			}
 
 		case models.SearchTypeHybrid:
-			// Para hybrid: calcular score híbrido
-			alpha := 0.3
-			if req.Alpha > 0 && req.Alpha <= 1.0 {
-				alpha = req.Alpha
-			}
-
+			// Para hybrid: combinar text_match normalizado com vector similarity
 			var textScore, vectorScore float64
 
-			// Extrair text_match e normalizar (Typesense usa escala 0-100+)
-			if tm, ok := doc.Metadata["text_match"].(int64); ok {
-				textScore = float64(tm) / 100.0
-			} else if tm, ok := doc.Metadata["text_match"].(float64); ok {
-				// Fallback: se vier como float64, normalizar também
-				textScore = tm / 100.0
+			// Extrair e normalizar text_match (min-max normalization)
+			var tm int64
+			if tmInt, ok := doc.Metadata["text_match"].(int64); ok {
+				tm = tmInt
+			} else if tmFloat, ok := doc.Metadata["text_match"].(float64); ok {
+				tm = int64(tmFloat)
 			}
 
-			// Extrair vector_distance e converter para similarity
-			// Normalizar cosine distance [0,2] para similarity [1,0]
-			if vd, ok := doc.Metadata["vector_distance"].(float32); ok {
-				vectorScore = 1.0 - (float64(vd) / 2.0)
-			} else if vd, ok := doc.Metadata["vector_distance"].(float64); ok {
-				// Fallback para float64 (caso venha de JSON unmarshaling)
-				vectorScore = 1.0 - (vd / 2.0)
+			if maxTextMatch > minTextMatch {
+				textScore = float64(tm-minTextMatch) / float64(maxTextMatch-minTextMatch)
+			} else {
+				textScore = 1.0
 			}
+			scoreInfo.TextMatchNormalized = &textScore
+
+			// Extrair e normalizar vector_distance
+			var vd float64
+			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
+				vd = float64(vdFloat32)
+			} else if vdFloat64, ok := doc.Metadata["vector_distance"].(float64); ok {
+				vd = vdFloat64
+			}
+
+			vectorScore = 1.0 - (vd / 2.0)
+			scoreInfo.VectorSimilarity = &vectorScore
 
 			// Calcular score híbrido: (1-alpha)*text + alpha*vector
 			hybridScore := (1.0-alpha)*textScore + alpha*vectorScore
-			passes = hybridScore >= minThreshold
+			scoreInfo.HybridScore = &hybridScore
+			normalizedScore = hybridScore
+
+			if threshold != nil {
+				passes = normalizedScore >= *threshold
+			}
 		}
 
-		if passes {
+		scoreInfo.PassedThreshold = passes
+
+		// Adicionar ScoreInfo ao metadata do documento
+		if doc.Metadata == nil {
+			doc.Metadata = make(map[string]interface{})
+		}
+		doc.Metadata["score_info"] = scoreInfo
+
+		// Aplicar filtro se threshold está configurado
+		if threshold == nil || passes {
 			filtered = append(filtered, doc)
 		}
 	}
 
-	// Metadata sobre a filtragem
-	filterMeta := map[string]interface{}{
-		"score_threshold_applied": true,
-		"original_count":          originalCount,
-		"filtered_count":          len(filtered),
-		"threshold_value":         minThreshold,
-		"search_type":             string(searchType),
+	// Metadata sobre a filtragem (só incluir se threshold foi aplicado)
+	var filterMeta map[string]interface{}
+	if threshold != nil {
+		filterMeta = map[string]interface{}{
+			"score_threshold_applied": true,
+			"original_count":          originalCount,
+			"filtered_count":          len(filtered),
+			"threshold_value":         *threshold,
+			"search_type":             string(searchType),
+		}
 	}
 
 	return filtered, filterMeta
