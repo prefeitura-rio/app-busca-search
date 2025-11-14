@@ -17,6 +17,16 @@ type ScoreThreshold struct {
 	Hybrid   *float64 `form:"threshold_hybrid" json:"hybrid,omitempty"`
 }
 
+// ScoreInfo contém informações sobre os scores de relevância de um documento
+type ScoreInfo struct {
+	TextMatchNormalized *float64 `json:"text_match_normalized,omitempty"` // Score normalizado 0-1 do text_match
+	VectorSimilarity    *float64 `json:"vector_similarity,omitempty"`     // Similaridade vetorial 0-1 (1 = idêntico)
+	HybridScore         *float64 `json:"hybrid_score,omitempty"`          // Score híbrido combinado 0-1
+	ThresholdApplied    string   `json:"threshold_applied,omitempty"`     // Tipo de threshold aplicado: "keyword", "semantic", "hybrid", "none"
+	ThresholdValue      *float64 `json:"threshold_value,omitempty"`       // Valor do threshold aplicado
+	PassedThreshold     bool     `json:"passed_threshold"`                // Se passou no threshold
+}
+
 // SearchRequest representa uma requisição de busca
 type SearchRequest struct {
 	Query                 string          `form:"q" binding:"required"`

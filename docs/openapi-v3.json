@@ -1616,6 +1616,134 @@
         ]
       }
     },
+    "/api/v1/categories": {
+      "get": {
+        "description": "Endpoint híbrido que retorna lista de categorias ordenadas por popularidade, quantidade de serviços ou ordem alfabética. Permite também filtrar serviços de uma categoria específica em uma única chamada. Scores de popularidade são baseados em dados hardcoded (futura integração com Google Analytics).\n\n**Casos de Uso:**\n1. Listar categorias: GET /api/v1/categories\n2. Ordenar por quantidade: GET /api/v1/categories?sort_by=count&order=desc\n3. Buscar serviços de categoria: GET /api/v1/categories?filter_category=Educação&page=1&per_page=10\n\n**Nota:** Quando filter_category é usado, o endpoint retorna tanto a lista de categorias quanto os serviços filtrados.",
+        "tags": [
+          "categories"
+        ],
+        "summary": "Lista categorias com contadores de serviços e scores de popularidade",
+        "parameters": [
+          {
+            "description": "Critério de ordenação",
+            "name": "sort_by",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "popularity",
+                "count",
+                "alpha"
+              ],
+              "default": "popularity"
+            }
+          },
+          {
+            "description": "Direção da ordenação",
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "description": "Incluir categorias sem serviços publicados",
+            "name": "include_empty",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Incluir serviços inativos/rascunhos (status != 1) nas contagens e filtros",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Nome da categoria para filtrar serviços (ex: Educação, Saúde, Transporte)",
+            "name": "filter_category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da página para serviços filtrados (mínimo: 1)",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "description": "Quantidade de serviços por página (máximo: 100)",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de categorias com metadados. Se filter_category fornecido, inclui também os serviços filtrados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.CategoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetros inválidos (sort_by, order, page ou per_page)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno ao buscar categorias ou serviços",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "description": "Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente)",
@@ -1864,6 +1992,41 @@
           }
         }
       },
+      "models.Category": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "popularity_score": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.CategoryResponse": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.Category"
+            }
+          },
+          "filtered_category": {
+            "$ref": "#/components/schemas/models.FilteredCategoryResult"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "total_categories": {
+            "type": "integer"
+          }
+        }
+      },
       "models.FieldChange": {
         "type": "object",
         "properties": {
@@ -1877,6 +2040,29 @@
             "description": "\"string\", \"int\", \"bool\", \"array\", \"object\"",
             "type": "string",
             "maxLength": 20000
+          }
+        }
+      },
+      "models.FilteredCategoryResult": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ServiceDocument"
+            }
+          },
+          "total_services": {
+            "type": "integer"
           }
         }
       },

@@ -31,6 +31,64 @@ spec:
       restartPolicy: Always
 
 ---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: app-busca-search-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: app-busca-search
+
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: app-busca-search-scaled-object
+spec:
+  scaleTargetRef:
+    name: app-busca-search
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  cooldownPeriod: 30
+  pollingInterval: 10
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+          selectPolicy: Max
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Percent
+              value: 10
+              periodSeconds: 60
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+          selectPolicy: Max
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.istio-system.svc.cluster.local:9090
+        metricName: http_requests_total
+        threshold: "300"
+        query: sum(rate(istio_requests_total{destination_workload="app-busca-search"}[30s]))
+        activationThreshold: "150"
+
+---
 apiVersion: v1
 kind: Service
 metadata:
