@@ -244,21 +244,61 @@ func (cs *CategoryService) transformHitsToDocuments(result *api.SearchResult) []
 			continue
 		}
 
-		// Converter document para ServiceDocument
+		// Converter document para map para fazer mapeamento manual dos campos
 		docBytes, err := json.Marshal(*hit.Document)
 		if err != nil {
 			continue
 		}
 
-		var doc models.ServiceDocument
-		if err := json.Unmarshal(docBytes, &doc); err != nil {
+		var tsDoc map[string]interface{}
+		if err := json.Unmarshal(docBytes, &tsDoc); err != nil {
 			continue
 		}
 
-		docs = append(docs, &doc)
+		// Transformar documento com mapeamento correto dos campos
+		doc := cs.transformDocument(tsDoc)
+		docs = append(docs, doc)
 	}
 
 	return docs
+}
+
+// transformDocument transforma um documento Typesense em ServiceDocument
+func (cs *CategoryService) transformDocument(tsDoc map[string]interface{}) *models.ServiceDocument {
+	// Extrair campos principais com mapeamento correto
+	id := getString(tsDoc, "id")
+	title := getString(tsDoc, "nome_servico")
+	description := getString(tsDoc, "resumo")
+	category := getString(tsDoc, "tema_geral")
+	status := getInt32(tsDoc, "status")
+	createdAt := getInt64(tsDoc, "created_at")
+	updatedAt := getInt64(tsDoc, "last_update")
+
+	// Todos os outros campos vão para metadata
+	metadata := make(map[string]interface{})
+	excludeFields := map[string]bool{
+		"id": true, "nome_servico": true, "resumo": true,
+		"tema_geral": true, "status": true, "created_at": true,
+		"last_update": true, "embedding": true, // não retornar embedding
+		"search_content": true, // não retornar search_content
+	}
+
+	for key, value := range tsDoc {
+		if !excludeFields[key] {
+			metadata[key] = value
+		}
+	}
+
+	return &models.ServiceDocument{
+		ID:          id,
+		Title:       title,
+		Description: description,
+		Category:    category,
+		Status:      status,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
+		Metadata:    metadata,
+	}
 }
 
 // filterNonEmpty remove categorias sem serviços
