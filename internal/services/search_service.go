@@ -15,6 +15,9 @@ import (
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/typesense/typesense-go/v3/typesense"
 	"github.com/typesense/typesense-go/v3/typesense/api"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"google.golang.org/genai"
 )
 
@@ -95,6 +98,15 @@ func (ss *SearchService) Search(ctx context.Context, req *models.SearchRequest) 
 // ============================================================================
 
 func (ss *SearchService) KeywordSearch(ctx context.Context, req *models.SearchRequest) (*models.SearchResponse, error) {
+	ctx, span := otel.Tracer("search").Start(ctx, "KeywordSearch")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("search.query", req.Query),
+		attribute.Int("search.page", req.Page),
+		attribute.Int("search.per_page", req.PerPage),
+	)
+
 	prioritizeExact := true
 	prioritizePos := true
 
@@ -119,22 +131,34 @@ func (ss *SearchService) KeywordSearch(ctx context.Context, req *models.SearchRe
 	}
 
 	// Executar busca
+	_, typesenseSpan := otel.Tracer("search").Start(ctx, "Typesense.KeywordSearch")
 	result, err := ss.client.Collection(CollectionName).Documents().Search(ctx, searchParams)
+	typesenseSpan.End()
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Typesense search failed")
 		return nil, fmt.Errorf("erro ao executar busca keyword: %w", err)
 	}
 
 	// Transformar resultados
 	docs, err := ss.transformResults(result)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Transform results failed")
 		return nil, err
 	}
 
+	span.SetAttributes(attribute.Int("search.results.raw_count", len(docs)))
+
 	// Aplicar filtro de score threshold
+	_, filterSpan := otel.Tracer("search").Start(ctx, "ApplyScoreThreshold")
 	filteredDocs, filterMeta := ss.applyScoreThreshold(docs, req, models.SearchTypeKeyword)
+	filterSpan.End()
 
 	// Total count ajustado após filtragem
 	totalCount := len(filteredDocs)
+	span.SetAttributes(attribute.Int("search.results.filtered_count", totalCount))
 
 	response := &models.SearchResponse{
 		Results:    filteredDocs,
@@ -157,7 +181,17 @@ func (ss *SearchService) KeywordSearch(ctx context.Context, req *models.SearchRe
 // ============================================================================
 
 func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchRequest) (*models.SearchResponse, error) {
+	ctx, span := otel.Tracer("search").Start(ctx, "SemanticSearch")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("search.query", req.Query),
+		attribute.Int("search.page", req.Page),
+		attribute.Int("search.per_page", req.PerPage),
+	)
+
 	if ss.embeddingService == nil {
+		span.SetStatus(codes.Error, "Embedding service not configured")
 		return nil, fmt.Errorf("busca semântica requer serviço de embeddings configurado")
 	}
 
@@ -165,14 +199,22 @@ func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchR
 	ctxEmbed, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
+	_, embeddingSpan := otel.Tracer("search").Start(ctx, "GenerateEmbedding")
 	embedding, err := ss.embeddingService.GenerateEmbedding(ctxEmbed, req.Query)
+	embeddingSpan.End()
+
 	if err != nil {
+		span.RecordError(err)
 		if errors.Is(err, context.Canceled) || errors.Is(ctxEmbed.Err(), context.Canceled) {
+			span.SetStatus(codes.Error, "Embedding generation canceled")
 			log.Printf("Semantic search canceled for query: %s", req.Query)
 			return nil, ErrSearchCanceled
 		}
+		span.SetStatus(codes.Error, "Embedding generation failed")
 		return nil, fmt.Errorf("erro ao gerar embedding: %v", err)
 	}
+
+	span.SetAttributes(attribute.Int("search.embedding.dimensions", len(embedding)))
 
 	// Busca vetorial pura (alpha = 1.0 = 100% vector)
 	return ss.executeVectorSearch(ctx, req, embedding, 1.0)
@@ -183,6 +225,15 @@ func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchR
 // ============================================================================
 
 func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchRequest) (*models.SearchResponse, error) {
+	ctx, span := otel.Tracer("search").Start(ctx, "HybridSearch")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("search.query", req.Query),
+		attribute.Int("search.page", req.Page),
+		attribute.Int("search.per_page", req.PerPage),
+	)
+
 	// Tentar gerar embedding com fallback gracioso para keyword
 	var embedding []float32
 	var err error
@@ -191,13 +242,20 @@ func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchReq
 		ctxEmbed, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
 
+		_, embeddingSpan := otel.Tracer("search").Start(ctx, "GenerateEmbedding")
 		embedding, err = ss.embeddingService.GenerateEmbedding(ctxEmbed, req.Query)
+		embeddingSpan.End()
+
 		if err != nil {
+			span.AddEvent("Fallback to KeywordSearch due to embedding failure")
 			log.Printf("Hybrid search fallback to keyword: %v", err)
 			return ss.KeywordSearch(ctx, req)
 		}
+
+		span.SetAttributes(attribute.Int("search.embedding.dimensions", len(embedding)))
 	} else {
 		// Sem embeddings, fallback para keyword
+		span.AddEvent("Fallback to KeywordSearch - no embedding service")
 		return ss.KeywordSearch(ctx, req)
 	}
 
@@ -206,6 +264,8 @@ func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchReq
 	if req.Alpha > 0 && req.Alpha <= 1.0 {
 		alpha = req.Alpha
 	}
+
+	span.SetAttributes(attribute.Float64("search.alpha", alpha))
 
 	return ss.executeVectorSearch(ctx, req, embedding, alpha)
 }
@@ -217,6 +277,14 @@ func (ss *SearchService) executeVectorSearch(
 	embedding []float32,
 	alpha float64,
 ) (*models.SearchResponse, error) {
+	ctx, span := otel.Tracer("search").Start(ctx, "ExecuteVectorSearch")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.Int("search.embedding.size", len(embedding)),
+		attribute.Float64("search.alpha", alpha),
+	)
+
 	// Formatar embedding como array de floats
 	embeddingStr := make([]string, len(embedding))
 	for i, v := range embedding {
@@ -270,20 +338,34 @@ func (ss *SearchService) executeVectorSearch(
 	httpReq.Header.Set("X-TYPESENSE-API-KEY", ss.typesenseKey)
 
 	// Executar requisição
+	_, httpSpan := otel.Tracer("search").Start(ctx, "HTTP.POST.MultiSearch")
+	httpSpan.SetAttributes(
+		attribute.String("http.method", "POST"),
+		attribute.String("http.url", url),
+	)
 	resp, err := ss.httpClient.Do(httpReq)
+	httpSpan.End()
+
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "HTTP request failed")
 		return nil, fmt.Errorf("erro ao executar busca vetorial: %w", err)
 	}
 	defer resp.Body.Close()
 
+	span.SetAttributes(attribute.Int("http.status_code", resp.StatusCode))
+
 	// Ler resposta
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Failed to read response body")
 		return nil, fmt.Errorf("erro ao ler resposta: %w", err)
 	}
 
 	// Verificar status
 	if resp.StatusCode != http.StatusOK {
+		span.SetStatus(codes.Error, fmt.Sprintf("HTTP %d", resp.StatusCode))
 		return nil, fmt.Errorf("busca vetorial falhou (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -311,8 +393,12 @@ func (ss *SearchService) executeVectorSearch(
 	// Transformar resultados
 	docs, err := ss.transformResults(result)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "Transform results failed")
 		return nil, err
 	}
+
+	span.SetAttributes(attribute.Int("search.results.raw_count", len(docs)))
 
 	// Determinar tipo de busca
 	searchType := models.SearchTypeSemantic
@@ -321,10 +407,13 @@ func (ss *SearchService) executeVectorSearch(
 	}
 
 	// Aplicar filtro de score threshold
+	_, filterSpan := otel.Tracer("search").Start(ctx, "ApplyScoreThreshold")
 	filteredDocs, filterMeta := ss.applyScoreThreshold(docs, req, searchType)
+	filterSpan.End()
 
 	// Total count ajustado após filtragem
 	totalCount := len(filteredDocs)
+	span.SetAttributes(attribute.Int("search.results.filtered_count", totalCount))
 
 	response := &models.SearchResponse{
 		Results:    filteredDocs,
@@ -347,8 +436,18 @@ func (ss *SearchService) executeVectorSearch(
 // ============================================================================
 
 func (ss *SearchService) AIAgentSearch(ctx context.Context, req *models.SearchRequest) (*models.SearchResponse, error) {
+	ctx, span := otel.Tracer("search").Start(ctx, "AIAgentSearch")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("search.query", req.Query),
+		attribute.Int("search.page", req.Page),
+		attribute.Int("search.per_page", req.PerPage),
+	)
+
 	if ss.geminiClient == nil {
 		// Fallback para hybrid
+		span.AddEvent("Fallback to HybridSearch - no Gemini client")
 		log.Printf("AI search unavailable, falling back to hybrid")
 		return ss.HybridSearch(ctx, req)
 	}
@@ -357,12 +456,23 @@ func (ss *SearchService) AIAgentSearch(ctx context.Context, req *models.SearchRe
 	metrics := &models.AISearchMetrics{}
 
 	// 1. Análise da query com LLM (1 chamada Gemini)
+	_, analysisSpan := otel.Tracer("search").Start(ctx, "Gemini.AnalyzeQuery")
 	analysis, err := ss.analyzeQuery(ctx, req.Query)
+	analysisSpan.End()
+
 	if err != nil {
+		span.AddEvent("Fallback to HybridSearch - analysis failed")
+		span.RecordError(err)
 		log.Printf("AI analysis failed, fallback to hybrid: %v", err)
 		return ss.HybridSearch(ctx, req)
 	}
 	metrics.GeminiCalls++
+
+	span.SetAttributes(
+		attribute.String("ai.intent", analysis.Intent),
+		attribute.String("ai.search_strategy", analysis.SearchStrategy),
+		attribute.Float64("ai.confidence", analysis.Confidence),
+	)
 
 	// 2. Executar busca baseada na estratégia sugerida pelo LLM
 	var results *models.SearchResponse
@@ -388,16 +498,28 @@ func (ss *SearchService) AIAgentSearch(ctx context.Context, req *models.SearchRe
 
 	// 3. Re-ranking condicional (apenas se confiança baixa E muitos resultados)
 	if analysis.Confidence < 0.7 && len(results.Results) >= 10 {
+		_, rerankSpan := otel.Tracer("search").Start(ctx, "Gemini.RerankResults")
 		reranked, rerankErr := ss.rerankResults(ctx, req.Query, analysis.Intent, results.Results)
+		rerankSpan.End()
+
 		if rerankErr == nil {
 			results.Results = reranked
 			metrics.RerankExecuted = true
 			metrics.GeminiCalls++
+			span.AddEvent("Results reranked by Gemini")
+		} else {
+			span.AddEvent("Reranking failed, using original order")
 		}
 	}
 
 	// Adicionar metadata
 	metrics.TotalTime = float64(time.Since(startTime).Milliseconds())
+	span.SetAttributes(
+		attribute.Int("ai.gemini_calls", metrics.GeminiCalls),
+		attribute.Bool("ai.rerank_executed", metrics.RerankExecuted),
+		attribute.Float64("ai.total_time_ms", metrics.TotalTime),
+	)
+
 	results.Metadata = map[string]interface{}{
 		"analysis": analysis,
 		"metrics":  metrics,
