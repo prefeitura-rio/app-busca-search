@@ -6,6 +6,7 @@ import (
 	_ "github.com/prefeitura-rio/app-busca-search/docs"
 	"github.com/prefeitura-rio/app-busca-search/internal/api/routes"
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
+	"github.com/prefeitura-rio/app-busca-search/internal/observability"
 )
 
 // @title           Mecanismo de Busca API
@@ -23,8 +24,11 @@ import (
 // @host      services.staging.app.dados.rio/app-busca-search
 
 func main() {
-
 	cfg := config.LoadConfig()
+
+	// Initialize OpenTelemetry tracing
+	observability.InitTracer(cfg)
+	defer observability.ShutdownTracer()
 
 	r := routes.SetupRouter(cfg)
 

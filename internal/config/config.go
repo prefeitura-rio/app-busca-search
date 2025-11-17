@@ -7,30 +7,38 @@ import (
 )
 
 type Config struct {
-	TypesenseHost string
-	TypesensePort string
-	TypesenseAPIKey string
+	TypesenseHost     string
+	TypesensePort     string
+	TypesenseAPIKey   string
 	TypesenseProtocol string
 
 	ServerPort string
 
-	GeminiAPIKey string
+	GeminiAPIKey         string
 	GeminiEmbeddingModel string
+
+	// Tracing configuration
+	TracingEnabled  bool
+	TracingEndpoint string
 }
 
 func LoadConfig() *Config {
 	_ = godotenv.Load()
 
 	return &Config{
-		TypesenseHost: getEnv("TYPESENSE_HOST", "localhost"),
-		TypesensePort: getEnv("TYPESENSE_PORT", "8108"),
-		TypesenseAPIKey: getEnv("TYPESENSE_API_KEY", ""),
+		TypesenseHost:     getEnv("TYPESENSE_HOST", "localhost"),
+		TypesensePort:     getEnv("TYPESENSE_PORT", "8108"),
+		TypesenseAPIKey:   getEnv("TYPESENSE_API_KEY", ""),
 		TypesenseProtocol: getEnv("TYPESENSE_PROTOCOL", "http"),
 
 		ServerPort: getEnv("SERVER_PORT", "8080"),
 
-		GeminiAPIKey: getEnv("GEMINI_API_KEY", ""),
+		GeminiAPIKey:         getEnv("GEMINI_API_KEY", ""),
 		GeminiEmbeddingModel: getEnv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
+
+		// Tracing configuration
+		TracingEnabled:  getEnv("TRACING_ENABLED", "false") == "true",
+		TracingEndpoint: getEnv("TRACING_ENDPOINT", "localhost:4317"),
 	}
 }
 

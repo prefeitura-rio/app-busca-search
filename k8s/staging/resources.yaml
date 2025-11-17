@@ -21,6 +21,11 @@ spec:
           envFrom:
             - secretRef:
                 name: busca-secrets
+          env:
+            - name: TRACING_ENABLED
+              value: "true"
+            - name: TRACING_ENDPOINT
+              value: "signoz-otel-collector.signoz.svc.cluster.local:4317"
           # resources:
           #   requests:
           #     cpu: 500m

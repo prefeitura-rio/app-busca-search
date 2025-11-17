@@ -20,6 +20,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	r := gin.Default()
 
 	r.Use(corsMiddleware())
+	r.Use(middlewares.RequestTiming()) // Add OpenTelemetry tracing
 
 	typesenseClient := typesense.NewClient(cfg)
 
