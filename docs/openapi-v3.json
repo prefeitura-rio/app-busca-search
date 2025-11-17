@@ -1746,7 +1746,7 @@
     },
     "/api/v1/search": {
       "get": {
-        "description": "Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente)",
+        "description": "Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente). Resposta inclui total_count (total do Typesense) e filtered_count (após aplicar thresholds).",
         "tags": [
           "search"
         ],
@@ -1798,7 +1798,7 @@
             }
           },
           {
-            "description": "Alpha para busca hybrid (0-1, default: 0.3)",
+            "description": "Alpha para busca hybrid (0-1). Alpha=0.3 significa 30% texto + 70% vetor.",
             "name": "alpha",
             "in": "query",
             "schema": {
@@ -1807,7 +1807,7 @@
             }
           },
           {
-            "description": "Score mínimo para busca keyword (0-1, filtra text_match normalizado)",
+            "description": "Score mínimo para busca keyword (0-1, filtra text_match normalizado via log normalization)",
             "name": "threshold_keyword",
             "in": "query",
             "schema": {
@@ -1831,8 +1831,25 @@
             }
           },
           {
+            "description": "Score mínimo para busca AI com generate_scores=true (0-1, filtra por ai_score.final_score)",
+            "name": "threshold_ai",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
             "description": "Se true, exclui serviços exclusivos para agentes IA (mostra apenas serviços para humanos)",
             "name": "exclude_agent_exclusive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Gera scores detalhados via LLM para os resultados (apenas type=ai). ATENÇÃO: Consome créditos da API Gemini (1 chamada por resultado, max 20).",
+            "name": "generate_scores",
             "in": "query",
             "schema": {
               "type": "boolean",
@@ -2364,6 +2381,10 @@
       "models.SearchResponse": {
         "type": "object",
         "properties": {
+          "filtered_count": {
+            "description": "Após aplicar thresholds",
+            "type": "integer"
+          },
           "metadata": {
             "description": "Para AI search",
             "type": "object",
@@ -2385,6 +2406,7 @@
             "$ref": "#/components/schemas/models.SearchType"
           },
           "total_count": {
+            "description": "Total original do Typesense",
             "type": "integer"
           }
         }
