@@ -26,7 +26,7 @@ func NewSearchHandler(searchService *services.SearchService, typesenseClient *ty
 
 // Search godoc
 // @Summary Busca unificada de serviços públicos
-// @Description Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente)
+// @Description Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente). Resposta inclui total_count (total do Typesense) e filtered_count (após aplicar thresholds).
 // @Tags search
 // @Accept json
 // @Produce json
@@ -35,11 +35,13 @@ func NewSearchHandler(searchService *services.SearchService, typesenseClient *ty
 // @Param page query int false "Número da página (mínimo: 1)" default(1)
 // @Param per_page query int false "Resultados por página (máximo: 100)" default(10)
 // @Param include_inactive query bool false "Incluir serviços inativos (status != 1)" default(false)
-// @Param alpha query number false "Alpha para busca hybrid (0-1, default: 0.3)" default(0.3)
-// @Param threshold_keyword query number false "Score mínimo para busca keyword (0-1, filtra text_match normalizado)"
+// @Param alpha query number false "Alpha para busca hybrid (0-1). Alpha=0.3 significa 30% texto + 70% vetor." default(0.3)
+// @Param threshold_keyword query number false "Score mínimo para busca keyword (0-1, filtra text_match normalizado via log normalization)"
 // @Param threshold_semantic query number false "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)"
 // @Param threshold_hybrid query number false "Score mínimo para busca hybrid (0-1, filtra score híbrido combinado)"
+// @Param threshold_ai query number false "Score mínimo para busca AI com generate_scores=true (0-1, filtra por ai_score.final_score)"
 // @Param exclude_agent_exclusive query bool false "Se true, exclui serviços exclusivos para agentes IA (mostra apenas serviços para humanos)" default(false)
+// @Param generate_scores query bool false "Gera scores detalhados via LLM para os resultados (apenas type=ai). ATENÇÃO: Consome créditos da API Gemini (1 chamada por resultado, max 20)." default(false)
 // @Success 200 {object} models.SearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -57,7 +59,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	}
 
 	// Parse manual de threshold parameters (struct aninhado)
-	if c.Query("threshold_keyword") != "" || c.Query("threshold_semantic") != "" || c.Query("threshold_hybrid") != "" {
+	if c.Query("threshold_keyword") != "" || c.Query("threshold_semantic") != "" || c.Query("threshold_hybrid") != "" || c.Query("threshold_ai") != "" {
 		req.ScoreThreshold = &models.ScoreThreshold{}
 
 		if val := c.Query("threshold_keyword"); val != "" {
@@ -78,6 +80,13 @@ func (h *SearchHandler) Search(c *gin.Context) {
 			var f float64
 			if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
 				req.ScoreThreshold.Hybrid = &f
+			}
+		}
+
+		if val := c.Query("threshold_ai"); val != "" {
+			var f float64
+			if _, err := fmt.Sscanf(val, "%f", &f); err == nil {
+				req.ScoreThreshold.AI = &f
 			}
 		}
 	}

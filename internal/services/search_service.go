@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -151,21 +152,26 @@ func (ss *SearchService) KeywordSearch(ctx context.Context, req *models.SearchRe
 
 	span.SetAttributes(attribute.Int("search.results.raw_count", len(docs)))
 
+	// Total original do Typesense
+	totalCount := 0
+	if result.Found != nil {
+		totalCount = *result.Found
+	}
+
 	// Aplicar filtro de score threshold
 	_, filterSpan := otel.Tracer("search").Start(ctx, "ApplyScoreThreshold")
 	filteredDocs, filterMeta := ss.applyScoreThreshold(docs, req, models.SearchTypeKeyword)
 	filterSpan.End()
 
-	// Total count ajustado após filtragem
-	totalCount := len(filteredDocs)
-	span.SetAttributes(attribute.Int("search.results.filtered_count", totalCount))
+	span.SetAttributes(attribute.Int("search.results.filtered_count", len(filteredDocs)))
 
 	response := &models.SearchResponse{
-		Results:    filteredDocs,
-		TotalCount: totalCount,
-		Page:       req.Page,
-		PerPage:    req.PerPage,
-		SearchType: models.SearchTypeKeyword,
+		Results:       filteredDocs,
+		TotalCount:    totalCount,
+		FilteredCount: len(filteredDocs),
+		Page:          req.Page,
+		PerPage:       req.PerPage,
+		SearchType:    models.SearchTypeKeyword,
 	}
 
 	// Adicionar metadata de filtragem se aplicável
@@ -380,15 +386,22 @@ func (ss *SearchService) executeVectorSearch(
 	// Extrair primeiro resultado (nossa única busca)
 	if len(multiResult.Results) == 0 {
 		return &models.SearchResponse{
-			Results:    []*models.ServiceDocument{},
-			TotalCount: 0,
-			Page:       req.Page,
-			PerPage:    req.PerPage,
-			SearchType: models.SearchTypeSemantic,
+			Results:       []*models.ServiceDocument{},
+			TotalCount:    0,
+			FilteredCount: 0,
+			Page:          req.Page,
+			PerPage:       req.PerPage,
+			SearchType:    models.SearchTypeSemantic,
 		}, nil
 	}
 
 	result := &multiResult.Results[0]
+
+	// Total original do Typesense
+	totalCount := 0
+	if result.Found != nil {
+		totalCount = *result.Found
+	}
 
 	// Transformar resultados
 	docs, err := ss.transformResults(result)
@@ -411,16 +424,15 @@ func (ss *SearchService) executeVectorSearch(
 	filteredDocs, filterMeta := ss.applyScoreThreshold(docs, req, searchType)
 	filterSpan.End()
 
-	// Total count ajustado após filtragem
-	totalCount := len(filteredDocs)
-	span.SetAttributes(attribute.Int("search.results.filtered_count", totalCount))
+	span.SetAttributes(attribute.Int("search.results.filtered_count", len(filteredDocs)))
 
 	response := &models.SearchResponse{
-		Results:    filteredDocs,
-		TotalCount: totalCount,
-		Page:       req.Page,
-		PerPage:    req.PerPage,
-		SearchType: searchType,
+		Results:       filteredDocs,
+		TotalCount:    totalCount,
+		FilteredCount: len(filteredDocs),
+		Page:          req.Page,
+		PerPage:       req.PerPage,
+		SearchType:    searchType,
 	}
 
 	// Adicionar metadata de filtragem se aplicável
@@ -509,6 +521,62 @@ func (ss *SearchService) AIAgentSearch(ctx context.Context, req *models.SearchRe
 			span.AddEvent("Results reranked by Gemini")
 		} else {
 			span.AddEvent("Reranking failed, using original order")
+		}
+	}
+
+	// 4. AI Scoring com LLM (se generate_scores=true)
+	if req.GenerateScores && len(results.Results) > 0 {
+		_, scoringSpan := otel.Tracer("search").Start(ctx, "Gemini.GenerateAIScores")
+		topN := 20 // Configurável (máximo 20 por limitação do batch)
+		if len(results.Results) < topN {
+			topN = len(results.Results)
+		}
+
+		err := ss.generateAIScores(ctx, req.Query, results.Results, topN)
+		scoringSpan.End()
+
+		if err == nil {
+			// OTIMIZAÇÃO: Apenas 1 chamada Gemini (batch) ao invés de topN chamadas
+			metrics.GeminiCalls += 1
+			span.AddEvent(fmt.Sprintf("Generated AI scores for top %d results in 1 batch call", topN))
+
+			// Aplicar threshold_ai se especificado
+			if req.ScoreThreshold != nil && req.ScoreThreshold.AI != nil {
+				originalCount := len(results.Results)
+				filtered := make([]*models.ServiceDocument, 0)
+
+				for _, doc := range results.Results {
+					aiScore := getAIFinalScore(doc)
+					if aiScore >= *req.ScoreThreshold.AI {
+						filtered = append(filtered, doc)
+					}
+				}
+
+				results.Results = filtered
+				results.FilteredCount = len(filtered)
+				span.AddEvent(fmt.Sprintf("Applied AI threshold %.2f: %d -> %d results",
+					*req.ScoreThreshold.AI, originalCount, len(filtered)))
+			}
+
+			// Adicionar AI scores ao ScoreInfo de cada documento
+			for _, doc := range results.Results {
+				if _, ok := doc.Metadata["ai_score"]; ok {
+					// Obter ou criar ScoreInfo
+					var scoreInfo *models.ScoreInfo
+					if scoreInfoRaw, exists := doc.Metadata["score_info"]; exists {
+						scoreInfo, _ = scoreInfoRaw.(*models.ScoreInfo)
+					}
+					if scoreInfo == nil {
+						scoreInfo = &models.ScoreInfo{}
+					}
+
+					// Manter ScoreInfo (AI scores ficam no ai_score separado)
+					doc.Metadata["score_info"] = scoreInfo
+				}
+			}
+		} else {
+			span.AddEvent("AI scoring failed, continuing without scores")
+			log.Printf("Failed to generate AI scores: %v", err)
 		}
 	}
 
@@ -727,6 +795,247 @@ Retorne APENAS o JSON.`, query, intent, strings.Join(services, "\n"))
 	return reranked, nil
 }
 
+// generateAIScores gera scores detalhados via LLM em UMA ÚNICA CHAMADA com structured output
+// OTIMIZAÇÃO: Ao invés de N chamadas (1 por doc), faz 1 chamada batch para todos os docs
+func (ss *SearchService) generateAIScores(
+	ctx context.Context,
+	query string,
+	docs []*models.ServiceDocument,
+	topN int,
+) error {
+	if len(docs) == 0 {
+		return nil
+	}
+
+	// Limitar ao top-N (máximo 20 para evitar exceder contexto)
+	const MAX_BATCH_SIZE = 20
+	limit := topN
+	if limit > MAX_BATCH_SIZE {
+		limit = MAX_BATCH_SIZE
+	}
+	if len(docs) < limit {
+		limit = len(docs)
+	}
+	scoresToGenerate := docs[:limit]
+
+	// Timeout de 30s para batch (mais generoso que 10s individual)
+	ctxScore, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Construir lista de serviços para o prompt
+	servicesList := make([]string, len(scoresToGenerate))
+	for i, doc := range scoresToGenerate {
+		servicesList[i] = fmt.Sprintf("%d. [ID:%s] %s - %s",
+			i+1, doc.ID, doc.Title, doc.Description)
+	}
+
+	// Prompt estruturado para scoring em batch com CATEGORIAS (não números)
+	prompt := fmt.Sprintf(`Analise a relevância de cada um dos serviços abaixo para a busca do usuário.
+
+Query do usuário: "%s"
+
+Serviços a avaliar:
+%s
+
+Retorne um JSON com array de avaliações, uma para cada serviço (na mesma ordem):
+{
+  "scores": [
+    {
+      "service_id": "id-do-servico",
+      "relevance_category": "muito_relevante",
+      "confidence_level": "alta",
+      "exact_match": false,
+      "reasoning": "Breve explicação..."
+    }
+  ]
+}
+
+Campos a avaliar:
+- service_id: ID do serviço (copiar exatamente do [ID:...])
+- relevance_category: Use EXATAMENTE uma dessas opções:
+  * "irrelevante" - Serviço não tem relação com a query
+  * "pouco_relevante" - Serviço tem relação tangencial/indireta
+  * "relevante" - Serviço está relacionado à query
+  * "muito_relevante" - Serviço está fortemente relacionado
+  * "match_exato" - É exatamente o que o usuário busca
+
+- confidence_level: Use EXATAMENTE uma dessas opções:
+  * "baixa" - Não tenho certeza da avaliação
+  * "media" - Razoavelmente certo
+  * "alta" - Muito certo da avaliação
+  * "muito_alta" - Absolutamente certo
+
+- exact_match: true APENAS se é match_exato, false caso contrário
+
+- reasoning: explicação concisa (max 50 palavras) justificando a categoria
+
+IMPORTANTE:
+- Retornar avaliações para TODOS os %d serviços listados
+- Manter a mesma ordem da lista
+- Use APENAS as categorias listadas acima (copie exatamente como escrito)
+- Retornar APENAS o JSON, sem texto adicional`,
+		query,
+		strings.Join(servicesList, "\n"),
+		len(scoresToGenerate))
+
+	content := genai.NewContentFromText(prompt, genai.RoleUser)
+
+	resp, err := ss.geminiClient.Models.GenerateContent(ctxScore, ss.chatModel, []*genai.Content{content}, nil)
+	if err != nil {
+		return fmt.Errorf("erro ao chamar Gemini para batch scoring: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil || len(resp.Candidates[0].Content.Parts) == 0 {
+		return fmt.Errorf("resposta vazia do Gemini para batch scoring")
+	}
+
+	// Parse JSON response
+	part := resp.Candidates[0].Content.Parts[0]
+	fullStr := fmt.Sprintf("%v", part)
+
+	// Extrair JSON da resposta
+	var jsonStr string
+	if idx := strings.Index(fullStr, "```json"); idx != -1 {
+		jsonStart := idx + len("```json")
+		jsonStr = fullStr[jsonStart:]
+		if endIdx := strings.Index(jsonStr, "```"); endIdx != -1 {
+			jsonStr = jsonStr[:endIdx]
+		}
+	} else if idx := strings.Index(fullStr, "{\n"); idx != -1 {
+		jsonStr = fullStr[idx:]
+	} else if idx := strings.Index(fullStr, "{\"scores\""); idx != -1 {
+		// Tentar encontrar início do JSON object
+		jsonStr = fullStr[idx:]
+	} else {
+		log.Printf("No JSON found in batch scoring response: %s", fullStr)
+		return fmt.Errorf("resposta do Gemini não contém JSON")
+	}
+
+	jsonStr = strings.TrimSpace(jsonStr)
+
+	// Struct para batch response
+	var batchResult struct {
+		Scores []models.AIScore `json:"scores"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &batchResult); err != nil {
+		log.Printf("Failed to parse batch scoring JSON: %s", jsonStr)
+		return fmt.Errorf("erro ao parsear JSON do batch scoring: %w", err)
+	}
+
+	// Validar que recebemos scores para todos os documentos
+	if len(batchResult.Scores) != len(scoresToGenerate) {
+		log.Printf("Warning: Expected %d scores, got %d", len(scoresToGenerate), len(batchResult.Scores))
+	}
+
+	// Mapear scores aos documentos por service_id
+	scoreMap := make(map[string]*models.AIScore)
+	for i := range batchResult.Scores {
+		score := &batchResult.Scores[i]
+
+		// Mapear categorias para scores numéricos
+		score.Relevance = mapRelevanceCategoryToScore(score.RelevanceCategory)
+		score.Confidence = mapConfidenceLevelToScore(score.ConfidenceLevel)
+
+		// Calcular final_score baseado nos scores mapeados
+		// Fórmula: (relevance × confidence) com boost de 15% para exact_match
+		score.FinalScore = score.Relevance * score.Confidence
+		if score.ExactMatch {
+			// Boost de 15% para match exato (mantendo máximo de 1.0)
+			score.FinalScore = math.Min(1.0, score.FinalScore*1.15)
+		}
+
+		scoreMap[score.ServiceID] = score
+	}
+
+	// Adicionar scores ao metadata dos documentos
+	for _, doc := range scoresToGenerate {
+		if score, exists := scoreMap[doc.ID]; exists {
+			if doc.Metadata == nil {
+				doc.Metadata = make(map[string]interface{})
+			}
+			doc.Metadata["ai_score"] = score
+		} else {
+			log.Printf("Warning: No score received for document %s", doc.ID)
+		}
+	}
+
+	// Re-ordenar por final_score
+	for i := 0; i < len(docs); i++ {
+		for j := i + 1; j < len(docs); j++ {
+			scoreI := getAIFinalScore(docs[i])
+			scoreJ := getAIFinalScore(docs[j])
+			if scoreJ > scoreI {
+				docs[i], docs[j] = docs[j], docs[i]
+			}
+		}
+	}
+
+	return nil
+}
+
+// mapRelevanceCategoryToScore mapeia categoria de relevância para score numérico
+func mapRelevanceCategoryToScore(category string) float64 {
+	// Normalizar string (lowercase, trim)
+	category = strings.ToLower(strings.TrimSpace(category))
+
+	switch category {
+	case models.RelevanceIrrelevant:
+		return 0.0
+	case models.RelevanceLow:
+		return 0.3
+	case models.RelevanceModerate:
+		return 0.6
+	case models.RelevanceHigh:
+		return 0.85
+	case models.RelevanceExact:
+		return 1.0
+	default:
+		// Fallback: tentar inferir pelo texto
+		log.Printf("Warning: Unknown relevance category '%s', defaulting to 0.5", category)
+		return 0.5
+	}
+}
+
+// mapConfidenceLevelToScore mapeia nível de confiança para score numérico
+func mapConfidenceLevelToScore(level string) float64 {
+	// Normalizar string (lowercase, trim)
+	level = strings.ToLower(strings.TrimSpace(level))
+
+	switch level {
+	case models.ConfidenceLow:
+		return 0.5
+	case models.ConfidenceMedium:
+		return 0.7
+	case models.ConfidenceHigh:
+		return 0.9
+	case models.ConfidenceVeryHigh:
+		return 1.0
+	default:
+		// Fallback
+		log.Printf("Warning: Unknown confidence level '%s', defaulting to 0.7", level)
+		return 0.7
+	}
+}
+
+// getAIFinalScore extrai o final_score do ai_score de um documento
+func getAIFinalScore(doc *models.ServiceDocument) float64 {
+	if doc.Metadata == nil {
+		return 0.0
+	}
+
+	aiScoreRaw, ok := doc.Metadata["ai_score"]
+	if !ok {
+		return 0.0
+	}
+
+	aiScore, ok := aiScoreRaw.(*models.AIScore)
+	if !ok {
+		return 0.0
+	}
+
+	return aiScore.FinalScore
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -845,6 +1154,17 @@ func stringPtr(s string) *string { return &s }
 func intPtr(i int) *int          { return &i }
 func boolPtr(b bool) *bool       { return &b }
 
+// normalizeTextMatch normaliza text_match usando log normalization
+func normalizeTextMatch(score float64) float64 {
+	const MAX_OBSERVED = 100000.0
+	if score <= 0 {
+		return 0.0
+	}
+	// Log normalization para melhor distribuição
+	normalized := math.Log1p(score) / math.Log1p(MAX_OBSERVED)
+	return math.Min(1.0, normalized)
+}
+
 // buildFilterBy constrói a expressão de filtro baseada no SearchRequest
 func buildFilterBy(req *models.SearchRequest) string {
 	var filters []string
@@ -908,34 +1228,7 @@ func (ss *SearchService) applyScoreThreshold(
 		alpha = req.Alpha
 	}
 
-	// FASE 1: Calcular min/max para normalização de text_match (se necessário)
-	var minTextMatch, maxTextMatch int64
-	needsTextNormalization := searchType == models.SearchTypeKeyword || searchType == models.SearchTypeHybrid
-
-	if needsTextNormalization {
-		minTextMatch = int64(9223372036854775807) // max int64
-		maxTextMatch = int64(0)
-
-		for _, doc := range docs {
-			var tm int64
-			if tmInt, ok := doc.Metadata["text_match"].(int64); ok {
-				tm = tmInt
-			} else if tmFloat, ok := doc.Metadata["text_match"].(float64); ok {
-				tm = int64(tmFloat)
-			} else {
-				continue
-			}
-
-			if tm < minTextMatch {
-				minTextMatch = tm
-			}
-			if tm > maxTextMatch {
-				maxTextMatch = tm
-			}
-		}
-	}
-
-	// FASE 2: Processar cada documento, calcular scores e aplicar threshold
+	// Processar cada documento, calcular scores e aplicar threshold
 	originalCount := len(docs)
 	filtered := make([]*models.ServiceDocument, 0, len(docs))
 
@@ -953,24 +1246,17 @@ func (ss *SearchService) applyScoreThreshold(
 
 		switch searchType {
 		case models.SearchTypeKeyword:
-			// Para keyword: normalizar text_match usando min-max normalization
+			// Para keyword: normalizar text_match usando log normalization
 			// text_match do Typesense são valores absolutos unbounded (podem ser bilhões/trilhões)
-			// Normalizamos relativamente ao conjunto de resultados atual
-			var tm int64
+			var tm float64
 			if tmInt, ok := doc.Metadata["text_match"].(int64); ok {
-				tm = tmInt
+				tm = float64(tmInt)
 			} else if tmFloat, ok := doc.Metadata["text_match"].(float64); ok {
-				tm = int64(tmFloat)
+				tm = tmFloat
 			}
 
-			// Min-max normalization: (value - min) / (max - min)
-			// Se max == min, todos têm o mesmo score (normalizar para 1.0)
-			if maxTextMatch > minTextMatch {
-				normalizedScore = float64(tm-minTextMatch) / float64(maxTextMatch-minTextMatch)
-			} else {
-				normalizedScore = 1.0
-			}
-
+			// Log normalization para melhor distribuição
+			normalizedScore = normalizeTextMatch(tm)
 			scoreInfo.TextMatchNormalized = &normalizedScore
 
 			if threshold != nil {
@@ -987,8 +1273,9 @@ func (ss *SearchService) applyScoreThreshold(
 				vd = vdFloat64
 			}
 
-			// Converter cosine distance para similarity
+			// Converter cosine distance para similarity com clamp
 			similarity := 1.0 - (vd / 2.0)
+			similarity = math.Max(0.0, math.Min(1.0, similarity))
 			scoreInfo.VectorSimilarity = &similarity
 			normalizedScore = similarity
 
@@ -1000,19 +1287,15 @@ func (ss *SearchService) applyScoreThreshold(
 			// Para hybrid: combinar text_match normalizado com vector similarity
 			var textScore, vectorScore float64
 
-			// Extrair e normalizar text_match (min-max normalization)
-			var tm int64
+			// Extrair e normalizar text_match (log normalization)
+			var tm float64
 			if tmInt, ok := doc.Metadata["text_match"].(int64); ok {
-				tm = tmInt
+				tm = float64(tmInt)
 			} else if tmFloat, ok := doc.Metadata["text_match"].(float64); ok {
-				tm = int64(tmFloat)
+				tm = tmFloat
 			}
 
-			if maxTextMatch > minTextMatch {
-				textScore = float64(tm-minTextMatch) / float64(maxTextMatch-minTextMatch)
-			} else {
-				textScore = 1.0
-			}
+			textScore = normalizeTextMatch(tm)
 			scoreInfo.TextMatchNormalized = &textScore
 
 			// Extrair e normalizar vector_distance
@@ -1023,11 +1306,13 @@ func (ss *SearchService) applyScoreThreshold(
 				vd = vdFloat64
 			}
 
+			// Converter cosine distance para similarity com clamp
 			vectorScore = 1.0 - (vd / 2.0)
+			vectorScore = math.Max(0.0, math.Min(1.0, vectorScore))
 			scoreInfo.VectorSimilarity = &vectorScore
 
-			// Calcular score híbrido: (1-alpha)*text + alpha*vector
-			hybridScore := (1.0-alpha)*textScore + alpha*vectorScore
+			// Calcular score híbrido: alpha*text + (1-alpha)*vector (fórmula corrigida)
+			hybridScore := alpha*textScore + (1.0-alpha)*vectorScore
 			scoreInfo.HybridScore = &hybridScore
 			normalizedScore = hybridScore
 
@@ -1043,6 +1328,10 @@ func (ss *SearchService) applyScoreThreshold(
 			doc.Metadata = make(map[string]interface{})
 		}
 		doc.Metadata["score_info"] = scoreInfo
+
+		// Limpar metadata poluída (remover campos internos)
+		delete(doc.Metadata, "text_match")
+		delete(doc.Metadata, "vector_distance")
 
 		// Aplicar filtro se threshold está configurado
 		if threshold == nil || passes {

@@ -15,7 +15,37 @@ type ScoreThreshold struct {
 	Keyword  *float64 `form:"threshold_keyword" json:"keyword,omitempty"`
 	Semantic *float64 `form:"threshold_semantic" json:"semantic,omitempty"`
 	Hybrid   *float64 `form:"threshold_hybrid" json:"hybrid,omitempty"`
+	AI       *float64 `form:"threshold_ai" json:"ai,omitempty"`
 }
+
+// AIScore estrutura multi-dimensional de scoring via LLM
+type AIScore struct {
+	ServiceID         string  `json:"service_id"`                   // ID do serviço (para mapeamento batch)
+	RelevanceCategory string  `json:"relevance_category"`           // Categoria de relevância (da AI)
+	ConfidenceLevel   string  `json:"confidence_level"`             // Nível de confiança (da AI)
+	Relevance         float64 `json:"relevance"`                    // Score numérico (calculado por nós)
+	Confidence        float64 `json:"confidence"`                   // Score numérico (calculado por nós)
+	ExactMatch        bool    `json:"exact_match"`                  // Match exato com a query
+	FinalScore        float64 `json:"final_score"`                  // Score combinado (calculado por nós)
+	Reasoning         string  `json:"reasoning,omitempty"`          // Breve explicação
+}
+
+// Categorias de relevância (usadas pela AI)
+const (
+	RelevanceIrrelevant     = "irrelevante"
+	RelevanceLow            = "pouco_relevante"
+	RelevanceModerate       = "relevante"
+	RelevanceHigh           = "muito_relevante"
+	RelevanceExact          = "match_exato"
+)
+
+// Níveis de confiança (usados pela AI)
+const (
+	ConfidenceLow      = "baixa"
+	ConfidenceMedium   = "media"
+	ConfidenceHigh     = "alta"
+	ConfidenceVeryHigh = "muito_alta"
+)
 
 // ScoreInfo contém informações sobre os scores de relevância de um documento
 type ScoreInfo struct {
@@ -37,6 +67,7 @@ type SearchRequest struct {
 	Alpha                 float64         `form:"alpha"` // Para hybrid (default 0.3)
 	ScoreThreshold        *ScoreThreshold `form:"score_threshold,omitempty"`
 	ExcludeAgentExclusive *bool           `form:"exclude_agent_exclusive"`
+	GenerateScores        bool            `form:"generate_scores"` // Gerar AI scores via LLM (apenas para type=ai)
 }
 
 // ServiceDocument representa um documento de serviço retornado pela busca
@@ -53,12 +84,13 @@ type ServiceDocument struct {
 
 // SearchResponse representa a resposta de uma busca
 type SearchResponse struct {
-	Results    []*ServiceDocument     `json:"results"`
-	TotalCount int                    `json:"total_count"`
-	Page       int                    `json:"page"`
-	PerPage    int                    `json:"per_page"`
-	SearchType SearchType             `json:"search_type"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"` // Para AI search
+	Results       []*ServiceDocument     `json:"results"`
+	TotalCount    int                    `json:"total_count"`     // Total original do Typesense
+	FilteredCount int                    `json:"filtered_count"`  // Após aplicar thresholds
+	Page          int                    `json:"page"`
+	PerPage       int                    `json:"per_page"`
+	SearchType    SearchType             `json:"search_type"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"` // Para AI search
 }
 
 // AISearchMetrics métricas do AI Agent Search
