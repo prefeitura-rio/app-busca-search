@@ -1848,7 +1848,7 @@
             }
           },
           {
-            "description": "Gera scores detalhados via LLM para os resultados (apenas type=ai). ATENÇÃO: Consome créditos da API Gemini (1 chamada por resultado, max 20).",
+            "description": "Gera scores detalhados via LLM para os resultados (apenas type=ai).",
             "name": "generate_scores",
             "in": "query",
             "schema": {
