@@ -1228,6 +1228,29 @@ func (ss *SearchService) applyScoreThreshold(
 		alpha = req.Alpha
 	}
 
+	// Para semantic e hybrid: calcular min/max de vector_distance para normalização
+	var minVectorDist, maxVectorDist float64
+	if searchType == models.SearchTypeSemantic || searchType == models.SearchTypeHybrid {
+		minVectorDist = math.MaxFloat64
+		maxVectorDist = -math.MaxFloat64
+
+		for _, doc := range docs {
+			var vd float64
+			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
+				vd = float64(vdFloat32)
+			} else if vdFloat64, ok := doc.Metadata["vector_distance"].(float64); ok {
+				vd = vdFloat64
+			}
+
+			if vd < minVectorDist {
+				minVectorDist = vd
+			}
+			if vd > maxVectorDist {
+				maxVectorDist = vd
+			}
+		}
+	}
+
 	// Processar cada documento, calcular scores e aplicar threshold
 	originalCount := len(docs)
 	filtered := make([]*models.ServiceDocument, 0, len(docs))
@@ -1264,7 +1287,7 @@ func (ss *SearchService) applyScoreThreshold(
 			}
 
 		case models.SearchTypeSemantic:
-			// Para semantic: converter vector_distance [0,2] para similarity [1,0]
+			// Para semantic: normalização min-max baseada nos resultados desta query
 			// Menor distance = maior similarity
 			var vd float64
 			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
@@ -1273,8 +1296,15 @@ func (ss *SearchService) applyScoreThreshold(
 				vd = vdFloat64
 			}
 
-			// Converter cosine distance para similarity com clamp
-			similarity := 1.0 - (vd / 2.0)
+			// Normalização min-max: melhor resultado (min distance) = 1.0, pior (max distance) = 0.0
+			var similarity float64
+			if maxVectorDist > minVectorDist {
+				// Inverter: menor distance = score maior
+				similarity = 1.0 - ((vd - minVectorDist) / (maxVectorDist - minVectorDist))
+			} else {
+				// Todos os resultados têm a mesma distance (edge case)
+				similarity = 1.0
+			}
 			similarity = math.Max(0.0, math.Min(1.0, similarity))
 			scoreInfo.VectorSimilarity = &similarity
 			normalizedScore = similarity
@@ -1284,7 +1314,7 @@ func (ss *SearchService) applyScoreThreshold(
 			}
 
 		case models.SearchTypeHybrid:
-			// Para hybrid: combinar text_match normalizado com vector similarity
+			// Para hybrid: combinar text_match normalizado com vector similarity (min-max)
 			var textScore, vectorScore float64
 
 			// Extrair e normalizar text_match (log normalization)
@@ -1298,7 +1328,7 @@ func (ss *SearchService) applyScoreThreshold(
 			textScore = normalizeTextMatch(tm)
 			scoreInfo.TextMatchNormalized = &textScore
 
-			// Extrair e normalizar vector_distance
+			// Extrair e normalizar vector_distance com min-max
 			var vd float64
 			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
 				vd = float64(vdFloat32)
@@ -1306,8 +1336,14 @@ func (ss *SearchService) applyScoreThreshold(
 				vd = vdFloat64
 			}
 
-			// Converter cosine distance para similarity com clamp
-			vectorScore = 1.0 - (vd / 2.0)
+			// Normalização min-max: melhor resultado (min distance) = 1.0, pior (max distance) = 0.0
+			if maxVectorDist > minVectorDist {
+				// Inverter: menor distance = score maior
+				vectorScore = 1.0 - ((vd - minVectorDist) / (maxVectorDist - minVectorDist))
+			} else {
+				// Todos os resultados têm a mesma distance (edge case)
+				vectorScore = 1.0
+			}
 			vectorScore = math.Max(0.0, math.Min(1.0, vectorScore))
 			scoreInfo.VectorSimilarity = &vectorScore
 
