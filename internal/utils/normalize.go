@@ -19,10 +19,10 @@ func NormalizarCategoria(categoria string) string {
 	// Remove acentos e diacríticos
 	t := transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
 	normalized, _, _ := transform.String(t, categoria)
-	
+
 	// Converte para minúsculas
 	normalized = strings.ToLower(normalized)
-	
+
 	return normalized
 }
 
@@ -36,4 +36,4 @@ func DesnormalizarCategoria(categoriaNormalizada string, categoriasValidas []str
 	}
 	// Se não encontrar correspondência, retorna a categoria normalizada mesmo
 	return categoriaNormalizada
-} 
+}

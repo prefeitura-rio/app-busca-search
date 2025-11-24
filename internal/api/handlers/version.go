@@ -190,29 +190,29 @@ func (h *VersionHandler) RollbackService(c *gin.Context) {
 
 	// Cria o serviço com os dados da versão alvo
 	rolledBackService := &models.PrefRioService{
-		ID:                        serviceID,
-		NomeServico:               targetVersion.NomeServico,
-		OrgaoGestor:               targetVersion.OrgaoGestor,
-		Resumo:                    targetVersion.Resumo,
-		TempoAtendimento:          targetVersion.TempoAtendimento,
-		CustoServico:              targetVersion.CustoServico,
-		ResultadoSolicitacao:      targetVersion.ResultadoSolicitacao,
-		DescricaoCompleta:         targetVersion.DescricaoCompleta,
-		Autor:                     targetVersion.Autor,
-		DocumentosNecessarios:     targetVersion.DocumentosNecessarios,
-		InstrucoesSolicitante:     targetVersion.InstrucoesSolicitante,
-		CanaisDigitais:            targetVersion.CanaisDigitais,
-		CanaisPresenciais:         targetVersion.CanaisPresenciais,
-		ServicoNaoCobre:           targetVersion.ServicoNaoCobre,
-		LegislacaoRelacionada:     targetVersion.LegislacaoRelacionada,
-		TemaGeral:                 targetVersion.TemaGeral,
-		PublicoEspecifico:         targetVersion.PublicoEspecifico,
-		FixarDestaque:             targetVersion.FixarDestaque,
-		AwaitingApproval:          targetVersion.AwaitingApproval,
-		PublishedAt:               targetVersion.PublishedAt,
-		IsFree:                    targetVersion.IsFree,
-		Status:                    targetVersion.Status,
-		SearchContent:             targetVersion.SearchContent,
+		ID:                    serviceID,
+		NomeServico:           targetVersion.NomeServico,
+		OrgaoGestor:           targetVersion.OrgaoGestor,
+		Resumo:                targetVersion.Resumo,
+		TempoAtendimento:      targetVersion.TempoAtendimento,
+		CustoServico:          targetVersion.CustoServico,
+		ResultadoSolicitacao:  targetVersion.ResultadoSolicitacao,
+		DescricaoCompleta:     targetVersion.DescricaoCompleta,
+		Autor:                 targetVersion.Autor,
+		DocumentosNecessarios: targetVersion.DocumentosNecessarios,
+		InstrucoesSolicitante: targetVersion.InstrucoesSolicitante,
+		CanaisDigitais:        targetVersion.CanaisDigitais,
+		CanaisPresenciais:     targetVersion.CanaisPresenciais,
+		ServicoNaoCobre:       targetVersion.ServicoNaoCobre,
+		LegislacaoRelacionada: targetVersion.LegislacaoRelacionada,
+		TemaGeral:             targetVersion.TemaGeral,
+		PublicoEspecifico:     targetVersion.PublicoEspecifico,
+		FixarDestaque:         targetVersion.FixarDestaque,
+		AwaitingApproval:      targetVersion.AwaitingApproval,
+		PublishedAt:           targetVersion.PublishedAt,
+		IsFree:                targetVersion.IsFree,
+		Status:                targetVersion.Status,
+		SearchContent:         targetVersion.SearchContent,
 	}
 
 	// Atualiza o serviço com os dados do rollback
@@ -239,9 +239,9 @@ func (h *VersionHandler) RollbackService(c *gin.Context) {
 	// para suportar o flag is_rollback. Por enquanto, retornamos sucesso.
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Rollback realizado com sucesso",
-		"rolled_back_to":  request.ToVersion,
+		"message":          "Rollback realizado com sucesso",
+		"rolled_back_to":   request.ToVersion,
 		"previous_version": currentVersion.VersionNumber,
-		"service":         updatedService,
+		"service":          updatedService,
 	})
 }

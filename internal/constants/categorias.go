@@ -3,13 +3,13 @@ package constants
 // CategoriasValidas contém todas as categorias disponíveis no sistema
 var CategoriasValidas = []string{
 	"Cidade",
-	"Transporte", 
+	"Transporte",
 	"Saúde",
 	"Educação",
 	"Ambiente",
 	"Taxas",
 	"Cidadania",
-	"Emergência", 
+	"Emergência",
 	"Servidor",
 	"Segurança",
 	"Trabalho",
@@ -19,4 +19,4 @@ var CategoriasValidas = []string{
 	"Esportes",
 	"Animais",
 	"Astronomia",
-} 
+}

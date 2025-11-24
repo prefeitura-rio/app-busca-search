@@ -54,31 +54,31 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 
 	// Converte para modelo completo
 	service := &models.PrefRioService{
-		ID:                        serviceID,
-		NomeServico:               request.NomeServico,
-		OrgaoGestor:               request.OrgaoGestor,
-		Resumo:                    request.Resumo,
-		TempoAtendimento:          request.TempoAtendimento,
-		CustoServico:              request.CustoServico,
-		ResultadoSolicitacao:      request.ResultadoSolicitacao,
-		DescricaoCompleta:         request.DescricaoCompleta,
-		Autor:                     middlewares.GetUserName(c), // Preenchimento automático
-		DocumentosNecessarios:     request.DocumentosNecessarios,
-		InstrucoesSolicitante:     request.InstrucoesSolicitante,
-		CanaisDigitais:            request.CanaisDigitais,
-		CanaisPresenciais:         request.CanaisPresenciais,
-		ServicoNaoCobre:           request.ServicoNaoCobre,
-		LegislacaoRelacionada:     request.LegislacaoRelacionada,
-		TemaGeral:                 request.TemaGeral,
-		PublicoEspecifico:         request.PublicoEspecifico,
-		FixarDestaque:             request.FixarDestaque,
-		AwaitingApproval:          request.AwaitingApproval,
-		PublishedAt:               request.PublishedAt,
-		IsFree:                    request.IsFree,
-		Agents:                    request.Agents,
-		ExtraFields:               request.ExtraFields,
-		Status:                    request.Status,
-		Buttons:                   request.Buttons,
+		ID:                    serviceID,
+		NomeServico:           request.NomeServico,
+		OrgaoGestor:           request.OrgaoGestor,
+		Resumo:                request.Resumo,
+		TempoAtendimento:      request.TempoAtendimento,
+		CustoServico:          request.CustoServico,
+		ResultadoSolicitacao:  request.ResultadoSolicitacao,
+		DescricaoCompleta:     request.DescricaoCompleta,
+		Autor:                 middlewares.GetUserName(c), // Preenchimento automático
+		DocumentosNecessarios: request.DocumentosNecessarios,
+		InstrucoesSolicitante: request.InstrucoesSolicitante,
+		CanaisDigitais:        request.CanaisDigitais,
+		CanaisPresenciais:     request.CanaisPresenciais,
+		ServicoNaoCobre:       request.ServicoNaoCobre,
+		LegislacaoRelacionada: request.LegislacaoRelacionada,
+		TemaGeral:             request.TemaGeral,
+		PublicoEspecifico:     request.PublicoEspecifico,
+		FixarDestaque:         request.FixarDestaque,
+		AwaitingApproval:      request.AwaitingApproval,
+		PublishedAt:           request.PublishedAt,
+		IsFree:                request.IsFree,
+		Agents:                request.Agents,
+		ExtraFields:           request.ExtraFields,
+		Status:                request.Status,
+		Buttons:               request.Buttons,
 	}
 
 	// Cria o serviço com rastreamento de versão
@@ -142,32 +142,32 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 
 	// Converte para modelo completo preservando dados existentes
 	service := &models.PrefRioService{
-		ID:                        serviceID,
-		NomeServico:               request.NomeServico,
-		OrgaoGestor:               request.OrgaoGestor,
-		Resumo:                    request.Resumo,
-		TempoAtendimento:          request.TempoAtendimento,
-		CustoServico:              request.CustoServico,
-		ResultadoSolicitacao:      request.ResultadoSolicitacao,
-		DescricaoCompleta:         request.DescricaoCompleta,
-		Autor:                     existingService.Autor, // Preserva autor original
-		DocumentosNecessarios:     request.DocumentosNecessarios,
-		InstrucoesSolicitante:     request.InstrucoesSolicitante,
-		CanaisDigitais:            request.CanaisDigitais,
-		CanaisPresenciais:         request.CanaisPresenciais,
-		ServicoNaoCobre:           request.ServicoNaoCobre,
-		LegislacaoRelacionada:     request.LegislacaoRelacionada,
-		TemaGeral:                 request.TemaGeral,
-		PublicoEspecifico:         request.PublicoEspecifico,
-		FixarDestaque:             request.FixarDestaque,
-		AwaitingApproval:          request.AwaitingApproval,
-		PublishedAt:               request.PublishedAt,
-		IsFree:                    request.IsFree,
-		Agents:                    request.Agents,
-		ExtraFields:               request.ExtraFields,
-		Status:                    request.Status,
-		Buttons:                   request.Buttons,
-		CreatedAt:                 existingService.CreatedAt, // Preserva data de criação
+		ID:                    serviceID,
+		NomeServico:           request.NomeServico,
+		OrgaoGestor:           request.OrgaoGestor,
+		Resumo:                request.Resumo,
+		TempoAtendimento:      request.TempoAtendimento,
+		CustoServico:          request.CustoServico,
+		ResultadoSolicitacao:  request.ResultadoSolicitacao,
+		DescricaoCompleta:     request.DescricaoCompleta,
+		Autor:                 existingService.Autor, // Preserva autor original
+		DocumentosNecessarios: request.DocumentosNecessarios,
+		InstrucoesSolicitante: request.InstrucoesSolicitante,
+		CanaisDigitais:        request.CanaisDigitais,
+		CanaisPresenciais:     request.CanaisPresenciais,
+		ServicoNaoCobre:       request.ServicoNaoCobre,
+		LegislacaoRelacionada: request.LegislacaoRelacionada,
+		TemaGeral:             request.TemaGeral,
+		PublicoEspecifico:     request.PublicoEspecifico,
+		FixarDestaque:         request.FixarDestaque,
+		AwaitingApproval:      request.AwaitingApproval,
+		PublishedAt:           request.PublishedAt,
+		IsFree:                request.IsFree,
+		Agents:                request.Agents,
+		ExtraFields:           request.ExtraFields,
+		Status:                request.Status,
+		Buttons:               request.Buttons,
+		CreatedAt:             existingService.CreatedAt, // Preserva data de criação
 	}
 
 	// Atualiza o serviço com rastreamento de versão
@@ -400,7 +400,7 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 		existingTombamento, _ := h.typesenseClient.GetTombamentoByOldServiceID(ctx, origem, idServicoAntigo)
 		if existingTombamento != nil {
 			c.JSON(http.StatusConflict, gin.H{
-				"error": "Já existe um tombamento para este serviço antigo",
+				"error":                "Já existe um tombamento para este serviço antigo",
 				"tombamento_existente": existingTombamento,
 			})
 			return

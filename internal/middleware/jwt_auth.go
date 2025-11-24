@@ -39,7 +39,7 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 
 		// Remove "Bearer " do header
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		
+
 		// Parse do JWT (sem validação de assinatura)
 		claims, err := parseJWTClaims(tokenString)
 		if err != nil {
@@ -53,11 +53,11 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 		c.Set(UserIDKey, claims.Sub)
 		c.Set(UserNameKey, claims.Name)
 		c.Set(UserEmailKey, claims.Email)
-		
+
 		// Extrai role principal (para logs/auditoria, não para autorização)
 		role := extractPrimaryRole(claims)
 		c.Set(UserRoleKey, role)
-		
+
 		c.Next()
 	}
 }
@@ -72,12 +72,12 @@ func parseJWTClaims(tokenString string) (*JWTClaims, error) {
 
 	// Decodifica o payload (parte do meio)
 	payload := parts[1]
-	
+
 	// Adiciona padding se necessário
 	if len(payload)%4 != 0 {
 		payload += strings.Repeat("=", 4-len(payload)%4)
 	}
-	
+
 	// Decodifica base64
 	decoded, err := base64.URLEncoding.DecodeString(payload)
 	if err != nil {

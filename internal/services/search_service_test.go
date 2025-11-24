@@ -9,8 +9,8 @@ import (
 func TestScoreNormalizationComparison(t *testing.T) {
 	// Exemplo: resultados de uma busca por "IPTU" com diferentes vector distances
 	testCases := []struct {
-		name            string
-		vectorDistance  float64
+		name           string
+		vectorDistance float64
 	}{
 		{"IPTU Certidão (melhor)", 0.25},
 		{"Matrícula Escolar", 0.35},

@@ -31,13 +31,13 @@ type Category struct {
 
 // CategoryRequest representa requisição de categorias
 type CategoryRequest struct {
-	SortBy          string `form:"sort_by"`           // popularity, count, alpha
-	Order           string `form:"order"`             // asc, desc
-	IncludeEmpty    bool   `form:"include_empty"`     // incluir categorias sem serviços
-	IncludeInactive bool   `form:"include_inactive"`  // incluir serviços inativos (status != 1)
-	FilterCategory  string `form:"filter_category"`   // filtrar serviços por categoria
-	Page            int    `form:"page"`              // página para serviços filtrados
-	PerPage         int    `form:"per_page"`          // resultados por página
+	SortBy          string `form:"sort_by"`          // popularity, count, alpha
+	Order           string `form:"order"`            // asc, desc
+	IncludeEmpty    bool   `form:"include_empty"`    // incluir categorias sem serviços
+	IncludeInactive bool   `form:"include_inactive"` // incluir serviços inativos (status != 1)
+	FilterCategory  string `form:"filter_category"`  // filtrar serviços por categoria
+	Page            int    `form:"page"`             // página para serviços filtrados
+	PerPage         int    `form:"per_page"`         // resultados por página
 }
 
 // FilteredCategoryResult resultado de serviços filtrados por categoria
@@ -55,4 +55,4 @@ type CategoryResponse struct {
 	TotalCategories  int                     `json:"total_categories"`
 	FilteredCategory *FilteredCategoryResult `json:"filtered_category,omitempty"`
 	Metadata         map[string]interface{}  `json:"metadata"`
-} 
+}

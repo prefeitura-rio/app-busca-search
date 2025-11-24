@@ -56,4 +56,4 @@ func TestDesnormalizarCategoria(t *testing.T) {
 			t.Errorf("DesnormalizarCategoria(%q) = %q; expected %q", test.input, result, test.expected)
 		}
 	}
-} 
+}

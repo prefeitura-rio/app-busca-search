@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	UserCPFKey = "user_cpf"
-	UserRoleKey = "user_role"
-	UserIDKey = "user_id"
-	UserNameKey = "user_name"
+	UserCPFKey   = "user_cpf"
+	UserRoleKey  = "user_role"
+	UserIDKey    = "user_id"
+	UserNameKey  = "user_name"
 	UserEmailKey = "user_email"
 )
 
@@ -142,7 +142,7 @@ func HasRole(c *gin.Context, roles ...string) bool {
 func RequireRole(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userRole := GetUserRole(c)
-		
+
 		// Verifica se tem uma das roles necessárias
 		hasRole := false
 		for _, role := range roles {
@@ -151,17 +151,17 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 				break
 			}
 		}
-		
+
 		if !hasRole {
 			c.JSON(http.StatusForbidden, gin.H{
-				"error": "Acesso negado: permissão insuficiente",
+				"error":          "Acesso negado: permissão insuficiente",
 				"roles_required": roles,
-				"user_role": userRole,
+				"user_role":      userRole,
 			})
 			c.Abort()
 			return
 		}
-		
+
 		c.Next()
 	}
 }

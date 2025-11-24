@@ -20,14 +20,20 @@ import (
 )
 
 type Client struct {
-	client *typesense.Client
-	geminiClient *genai.Client
+	client         *typesense.Client
+	geminiClient   *genai.Client
 	embeddingModel string
 	versionService *services.VersionService
+	gatewayBaseURL string
 	// relevanciaService and filterService REMOVED - no longer used
 }
 
 func NewClient(cfg *config.Config) *Client {
+	// Validate gateway configuration
+	if cfg.GatewayBaseURL == "" {
+		log.Fatal("GATEWAY_BASE_URL environment variable is required but not set")
+	}
+
 	typesenseClient := typesense.NewClient(
 		typesense.WithServer(fmt.Sprintf("%s://%s:%s", cfg.TypesenseProtocol, cfg.TypesenseHost, cfg.TypesensePort)),
 		typesense.WithAPIKey(cfg.TypesenseAPIKey),
@@ -37,7 +43,7 @@ func NewClient(cfg *config.Config) *Client {
 	geminiClient, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey: cfg.GeminiAPIKey,
 	})
-	
+
 	if err != nil {
 		fmt.Printf("Erro ao inicializar cliente Gemini: %v\n", err)
 		geminiClient = nil
@@ -50,10 +56,11 @@ func NewClient(cfg *config.Config) *Client {
 	versionService := services.NewVersionService(typesenseClient)
 
 	client := &Client{
-		client: typesenseClient,
-		geminiClient: geminiClient,
+		client:         typesenseClient,
+		geminiClient:   geminiClient,
 		embeddingModel: cfg.GeminiEmbeddingModel,
 		versionService: versionService,
+		gatewayBaseURL: cfg.GatewayBaseURL,
 	}
 
 	// Garante que a collection de tombamentos existe
@@ -96,7 +103,7 @@ func (c *Client) GerarEmbedding(ctx context.Context, texto string) ([]float32, e
 	if c.geminiClient == nil {
 		return nil, fmt.Errorf("cliente Gemini não inicializado")
 	}
-	
+
 	// Trunca texto muito longo
 	maxLength := 10000
 	if len(texto) > maxLength {
@@ -136,7 +143,7 @@ func (c *Client) BuscaMultiColecaoComTexto(ctx context.Context, colecoes []strin
 	if err != nil {
 		return c.BuscaMultiColecao(colecoes, query, pagina, porPagina, nil)
 	}
-	
+
 	return c.BuscaMultiColecao(colecoes, query, pagina, porPagina, vetor)
 }
 
@@ -156,14 +163,14 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 			vectorStr += fmt.Sprintf("%.6f", val)
 		}
 		vectorStr += "]"
-		
+
 		alpha := 0.3
 		vq := fmt.Sprintf("embedding:(%s, alpha:%.1f)", vectorStr, alpha)
 		vectorQuery = &vq
 	}
-	
+
 	searches := make([]api.MultiSearchCollectionParameters, 0, len(colecoes))
-	
+
 	for _, colecao := range colecoes {
 		colecaoStr := colecao
 		colecaoPtr := &colecaoStr
@@ -189,11 +196,11 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 
 		searches = append(searches, collectionParams)
 	}
-	
+
 	searchesParam := api.MultiSearchSearchesParameter{
 		Searches: searches,
 	}
-	
+
 	searchResult, err := c.client.MultiSearch.Perform(ctx, &api.MultiSearchParams{}, searchesParam)
 	if err != nil {
 		return nil, err
@@ -305,10 +312,10 @@ func (c *Client) BuscaMultiColecao(colecoes []string, query string, pagina int, 
 	}
 
 	resp := map[string]interface{}{
-		"found":   totalFound,
-		"out_of":  totalFound,
-		"page":    pagina,
-		"hits":    pagedHits,
+		"found":  totalFound,
+		"out_of": totalFound,
+		"page":   pagina,
+		"hits":   pagedHits,
 	}
 
 	return resp, nil
@@ -320,7 +327,7 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 	filterBy := fmt.Sprintf("category:=%s", categoria)
 	includeFields := "*"
 	excludeFields := "embedding"
-	
+
 	// Wrapper para hits com relevância
 	type hitWithRelevance struct {
 		relevancia int
@@ -371,7 +378,7 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 				log.Printf("Erro ao serializar resultado da coleção %s: %v", colecao, err)
 				break // Sai do loop interno para ir para próxima coleção
 			}
-			
+
 			if err := json.Unmarshal(jsonData, &resultMap); err != nil {
 				log.Printf("Erro ao deserializar resultado da coleção %s: %v", colecao, err)
 				break // Sai do loop interno para ir para próxima coleção
@@ -415,12 +422,12 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 					}
 				}
 			}
-			
+
 			// Se retornou menos que perPageLimit, chegamos ao fim desta coleção
 			if hitsCount < perPageLimit {
 				break
 			}
-			
+
 			page++
 		}
 	}
@@ -460,10 +467,10 @@ func (c *Client) BuscaPorCategoriaMultiColecao(colecoes []string, categoria stri
 	}
 
 	resp := map[string]interface{}{
-		"found":   totalFound,
-		"out_of":  totalFound,
-		"page":    pagina,
-		"hits":    pagedHits,
+		"found":  totalFound,
+		"out_of": totalFound,
+		"page":   pagina,
+		"hits":   pagedHits,
 	}
 
 	return resp, nil
@@ -475,7 +482,7 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	filterBy := fmt.Sprintf("category:=%s", categoria)
 	includeFields := "*"
 	excludeFields := "embedding"
-	
+
 	// Wrapper para hits com relevância
 	type hitWithRelevance struct {
 		relevancia int
@@ -485,11 +492,11 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 	// Extrai hits e adiciona relevância
 	var allHitsWithRelevance []hitWithRelevance
 	totalFound := 0
-	
+
 	// Busca todos os resultados com paginação para não ultrapassar limite do Typesense
 	page := 1
 	perPageLimit := 250 // Máximo permitido pelo Typesense
-	
+
 	for {
 		searchParams := &api.SearchCollectionParams{
 			Q:             stringPtr("*"),
@@ -510,7 +517,7 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 		if err != nil {
 			return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
 		}
-		
+
 		if err := json.Unmarshal(jsonData, &resultMap); err != nil {
 			return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 		}
@@ -530,7 +537,7 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 					// REMOVED: relevanciaService - volumetry-based relevance no longer used
 					// Legacy code that calculated relevance based on CSV volumetry data
 					relevancia := 0
-					
+
 					allHitsWithRelevance = append(allHitsWithRelevance, hitWithRelevance{
 						relevancia: relevancia,
 						hit:        hitMap,
@@ -538,12 +545,12 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 				}
 			}
 		}
-		
+
 		// Se retornou menos que perPageLimit, chegamos ao fim
 		if hitsCount < perPageLimit {
 			break
 		}
-		
+
 		page++
 	}
 
@@ -587,7 +594,7 @@ func (c *Client) BuscaPorCategoria(colecao string, categoria string, pagina int,
 		"found": totalFound,
 		"page":  pagina,
 	}
-	
+
 	return finalResultMap, nil
 }
 
@@ -633,10 +640,10 @@ func (c *Client) BuscaPorID(colecao string, documentoID string) (map[string]inte
 // BuscarCategoriasRelevancia busca todas as categorias e calcula sua relevância baseada na volumetria dos serviços
 func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.CategoriasRelevanciaResponse, error) {
 	ctx := context.Background()
-	
+
 	// Mapa para acumular relevância por categoria
 	categoriasMap := make(map[string]*models.CategoriaRelevancia)
-	
+
 	// Inicializa todas as categorias válidas com valores zerados
 	for _, categoria := range constants.CategoriasValidas {
 		categoriasMap[categoria] = &models.CategoriaRelevancia{
@@ -651,10 +658,10 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 	for _, colecao := range colecoes {
 		// Busca usando facet para obter categorias únicas
 		searchParams := &api.SearchCollectionParams{
-			Q:         stringPtr("*"),
-			FacetBy:   stringPtr("category"),
-			Page:      intPtr(1),
-			PerPage:   intPtr(0), // Só queremos os facets, não os documentos
+			Q:       stringPtr("*"),
+			FacetBy: stringPtr("category"),
+			Page:    intPtr(1),
+			PerPage: intPtr(0), // Só queremos os facets, não os documentos
 		}
 
 		// Adiciona filtro status:=1 (publicado) para prefrio_services_base
@@ -662,7 +669,7 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 			filterBy := "status:=1"
 			searchParams.FilterBy = &filterBy
 		}
-		
+
 		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
 		if err != nil {
 			// Se é erro 404 (coleção não encontrada), pula para próxima coleção
@@ -673,12 +680,12 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 			log.Printf("Erro ao buscar categorias na coleção %s: %v", colecao, err)
 			continue
 		}
-		
+
 		// Processa os facets para obter categorias
 		var resultMap map[string]interface{}
 		jsonData, _ := json.Marshal(searchResult)
 		json.Unmarshal(jsonData, &resultMap)
-		
+
 		if facetCounts, ok := resultMap["facet_counts"].([]interface{}); ok {
 			for _, facet := range facetCounts {
 				if facetMap, ok := facet.(map[string]interface{}); ok {
@@ -702,7 +709,7 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 			}
 		}
 	}
-	
+
 	// Converte o mapa em slice e ordena por relevância
 	var categorias []models.CategoriaRelevancia
 	for _, categoria := range categoriasMap {
@@ -710,24 +717,24 @@ func (c *Client) BuscarCategoriasRelevancia(colecoes []string) (*models.Categori
 		if categoria.QuantidadeServicos > 0 {
 			categoria.RelevanciaMedia = float64(categoria.RelevanciaTotal) / float64(categoria.QuantidadeServicos)
 		}
-		
+
 		// Adiciona nome normalizado
 		categoria.NomeNormalizado = utils.NormalizarCategoria(categoria.Nome)
-		
+
 		categorias = append(categorias, *categoria)
 	}
-	
+
 	// Ordena por relevância total (maior primeiro)
 	sort.Slice(categorias, func(i, j int) bool {
 		return categorias[i].RelevanciaTotal > categorias[j].RelevanciaTotal
 	})
-	
+
 	response := &models.CategoriasRelevanciaResponse{
 		Categorias:        categorias,
 		TotalCategorias:   len(categorias),
 		UltimaAtualizacao: time.Now().Format(time.RFC3339),
 	}
-	
+
 	return response, nil
 }
 
@@ -745,7 +752,7 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 	quantidadeServicos := 0
 	page := 1
 	perPage := 250 // Máximo permitido pelo Typesense
-	
+
 	for {
 		searchParams := &api.SearchCollectionParams{
 			Q:             stringPtr("*"),
@@ -755,7 +762,7 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 			IncludeFields: stringPtr("titulo"),
 			ExcludeFields: stringPtr("embedding"),
 		}
-		
+
 		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
 		if err != nil {
 			// Se é erro 404 (coleção não encontrada), pula esta coleção
@@ -765,11 +772,11 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 			}
 			return err
 		}
-		
+
 		var resultMap map[string]interface{}
 		jsonData, _ := json.Marshal(searchResult)
 		json.Unmarshal(jsonData, &resultMap)
-		
+
 		hitsCount := 0
 		if hits, ok := resultMap["hits"].([]interface{}); ok {
 			hitsCount = len(hits)
@@ -787,15 +794,15 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 				}
 			}
 		}
-		
+
 		// Se retornou menos que perPage, chegamos ao fim
 		if hitsCount < perPage {
 			break
 		}
-		
+
 		page++
 	}
-	
+
 	// Acumula no mapa de categorias (pode existir em múltiplas coleções)
 	if existente, exists := categoriasMap[categoria]; exists {
 		existente.RelevanciaTotal += relevanciaTotal
@@ -807,7 +814,7 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 			QuantidadeServicos: quantidadeServicos,
 		}
 	}
-	
+
 	return nil
 }
 
@@ -815,17 +822,17 @@ func (c *Client) calcularRelevanciaCategoria(colecao string, categoria string, c
 func (c *Client) DiagnosticarCategoriasExistentes(colecoes []string) (map[string]int, error) {
 	ctx := context.Background()
 	categoriasEncontradas := make(map[string]int)
-	
+
 	// Para cada coleção, busca todas as categorias
 	for _, colecao := range colecoes {
 		// Busca usando facet para obter categorias únicas
 		searchParams := &api.SearchCollectionParams{
-			Q:         stringPtr("*"),
-			FacetBy:   stringPtr("category"),
-			Page:      intPtr(1),
-			PerPage:   intPtr(0), // Só queremos os facets, não os documentos
+			Q:       stringPtr("*"),
+			FacetBy: stringPtr("category"),
+			Page:    intPtr(1),
+			PerPage: intPtr(0), // Só queremos os facets, não os documentos
 		}
-		
+
 		searchResult, err := c.client.Collection(colecao).Documents().Search(ctx, searchParams)
 		if err != nil {
 			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
@@ -835,12 +842,12 @@ func (c *Client) DiagnosticarCategoriasExistentes(colecoes []string) (map[string
 			log.Printf("Erro ao buscar categorias na coleção %s: %v", colecao, err)
 			continue
 		}
-		
+
 		// Processa os facets para obter categorias
 		var resultMap map[string]interface{}
 		jsonData, _ := json.Marshal(searchResult)
 		json.Unmarshal(jsonData, &resultMap)
-		
+
 		if facetCounts, ok := resultMap["facet_counts"].([]interface{}); ok {
 			for _, facet := range facetCounts {
 				if facetMap, ok := facet.(map[string]interface{}); ok {
@@ -861,7 +868,7 @@ func (c *Client) DiagnosticarCategoriasExistentes(colecoes []string) (map[string
 			}
 		}
 	}
-	
+
 	return categoriasEncontradas, nil
 }
 
@@ -907,7 +914,7 @@ func (c *Client) EnsureCollectionExists(collectionName string) error {
 // createPrefRioServicesCollection cria a collection prefrio_services_base com o schema apropriado
 func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 	ctx := context.Background()
-	
+
 	schema := &api.CollectionSchema{
 		Name: collectionName,
 		Fields: []api.Field{
@@ -941,15 +948,15 @@ func (c *Client) createPrefRioServicesCollection(collectionName string) error {
 			{Name: "buttons", Type: "object[]", Facet: boolPtr(false), Optional: boolPtr(true)},
 			{Name: "embedding", Type: "float[]", Facet: boolPtr(false), Optional: boolPtr(true), NumDim: intPtr(768)},
 		},
-		DefaultSortingField:  stringPtr("last_update"),
-		EnableNestedFields:   boolPtr(true),
+		DefaultSortingField: stringPtr("last_update"),
+		EnableNestedFields:  boolPtr(true),
 	}
-	
+
 	_, err := c.client.Collections().Create(ctx, schema)
 	if err != nil {
 		return fmt.Errorf("erro ao criar collection %s: %v", collectionName, err)
 	}
-	
+
 	log.Printf("Collection %s criada com sucesso", collectionName)
 	return nil
 }
@@ -1085,6 +1092,9 @@ func (c *Client) CreatePrefRioServiceWithVersion(ctx context.Context, service *m
 	service.CreatedAt = now
 	service.LastUpdate = now
 
+	// Wrap service URLs through gateway
+	c.wrapServiceURLs(service)
+
 	// Gera o search_content combinando campos relevantes
 	service.SearchContent = c.generateSearchContent(service)
 
@@ -1176,6 +1186,9 @@ func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string,
 	// Define o ID e atualiza o timestamp
 	service.ID = id
 	service.LastUpdate = time.Now().Unix()
+
+	// Wrap service URLs through gateway
+	c.wrapServiceURLs(service)
 
 	// Gera o search_content combinando campos relevantes
 	service.SearchContent = c.generateSearchContent(service)
@@ -1303,7 +1316,12 @@ func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page
 	history, err := c.versionService.ListVersions(ctx, serviceID, page, perPage)
 
 	log.Printf("[ListServiceVersions] ListVersions retornou: err=%v, history.Found=%d (se history != nil)",
-		err, func() int { if history != nil { return history.Found }; return -1 }())
+		err, func() int {
+			if history != nil {
+				return history.Found
+			}
+			return -1
+		}())
 
 	// Se houve erro OU se não há versões registradas, tenta criar a versão 1 automaticamente (lazy migration)
 	shouldCreateInitialVersion := (err != nil) || (history != nil && history.Found == 0)
@@ -1412,23 +1430,23 @@ func (c *Client) CompareServiceVersions(ctx context.Context, serviceID string, f
 // GetPrefRioService busca um serviço específico por ID
 func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
-	
+
 	result, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("serviço não encontrado: %v", err)
 	}
-	
+
 	// Converte o resultado para o struct
 	resultBytes, err := json.Marshal(result)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
 	}
-	
+
 	var service models.PrefRioService
 	if err := json.Unmarshal(resultBytes, &service); err != nil {
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
-	
+
 	return &service, nil
 }
 
@@ -1488,28 +1506,28 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 		// Busca genérica se não há termo específico
 		searchParams.Q = stringPtr("*")
 	}
-	
+
 	if filterBy != "" {
 		searchParams.FilterBy = &filterBy
 	}
-	
+
 	// Executa a busca
 	searchResult, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar serviços: %v", err)
 	}
-	
+
 	// Converte resultado
 	var resultMap map[string]interface{}
 	jsonData, err := json.Marshal(searchResult)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
 	}
-	
+
 	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
 		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
 	}
-	
+
 	// Extrai serviços
 	var services []models.PrefRioService
 	if hits, ok := resultMap["hits"].([]interface{}); ok {
@@ -1525,7 +1543,7 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 			}
 		}
 	}
-	
+
 	// Monta resposta
 	found := 0
 	outOf := 0
@@ -1533,21 +1551,32 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 		found = int(foundFloat)
 		outOf = found
 	}
-	
+
 	response := &models.PrefRioServiceResponse{
 		Found:    found,
 		OutOf:    outOf,
 		Page:     page,
 		Services: services,
 	}
-	
+
 	return response, nil
 }
 
 // generateSearchContent gera o conteúdo de busca combinando campos relevantes
+// wrapServiceURLs aplica o gateway wrapper em todas as URLs do serviço
+func (c *Client) wrapServiceURLs(service *models.PrefRioService) {
+	// Wrap URLs in buttons
+	for i := range service.Buttons {
+		service.Buttons[i].URLService = utils.WrapURLIfNeeded(service.Buttons[i].URLService, c.gatewayBaseURL)
+	}
+
+	// Wrap URLs in CanaisDigitais
+	service.CanaisDigitais = utils.WrapURLsInArray(service.CanaisDigitais, c.gatewayBaseURL)
+}
+
 func (c *Client) generateSearchContent(service *models.PrefRioService) string {
 	var content []string
-	
+
 	if service.NomeServico != "" {
 		content = append(content, service.NomeServico)
 	}
@@ -1560,16 +1589,16 @@ func (c *Client) generateSearchContent(service *models.PrefRioService) string {
 	if service.TemaGeral != "" {
 		content = append(content, service.TemaGeral)
 	}
-	
+
 	// Adiciona órgãos gestores
 	content = append(content, service.OrgaoGestor...)
-	
+
 	// Adiciona público específico
 	content = append(content, service.PublicoEspecifico...)
-	
+
 	// Adiciona documentos necessários
 	content = append(content, service.DocumentosNecessarios...)
-	
+
 	return strings.Join(content, " ")
 }
 
@@ -1579,13 +1608,13 @@ func (c *Client) structToMap(v interface{}) (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var result map[string]interface{}
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return result, nil
 }
 

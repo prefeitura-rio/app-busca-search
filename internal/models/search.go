@@ -20,23 +20,23 @@ type ScoreThreshold struct {
 
 // AIScore estrutura multi-dimensional de scoring via LLM
 type AIScore struct {
-	ServiceID         string  `json:"service_id"`                   // ID do serviço (para mapeamento batch)
-	RelevanceCategory string  `json:"relevance_category"`           // Categoria de relevância (da AI)
-	ConfidenceLevel   string  `json:"confidence_level"`             // Nível de confiança (da AI)
-	Relevance         float64 `json:"relevance"`                    // Score numérico (calculado por nós)
-	Confidence        float64 `json:"confidence"`                   // Score numérico (calculado por nós)
-	ExactMatch        bool    `json:"exact_match"`                  // Match exato com a query
-	FinalScore        float64 `json:"final_score"`                  // Score combinado (calculado por nós)
-	Reasoning         string  `json:"reasoning,omitempty"`          // Breve explicação
+	ServiceID         string  `json:"service_id"`          // ID do serviço (para mapeamento batch)
+	RelevanceCategory string  `json:"relevance_category"`  // Categoria de relevância (da AI)
+	ConfidenceLevel   string  `json:"confidence_level"`    // Nível de confiança (da AI)
+	Relevance         float64 `json:"relevance"`           // Score numérico (calculado por nós)
+	Confidence        float64 `json:"confidence"`          // Score numérico (calculado por nós)
+	ExactMatch        bool    `json:"exact_match"`         // Match exato com a query
+	FinalScore        float64 `json:"final_score"`         // Score combinado (calculado por nós)
+	Reasoning         string  `json:"reasoning,omitempty"` // Breve explicação
 }
 
 // Categorias de relevância (usadas pela AI)
 const (
-	RelevanceIrrelevant     = "irrelevante"
-	RelevanceLow            = "pouco_relevante"
-	RelevanceModerate       = "relevante"
-	RelevanceHigh           = "muito_relevante"
-	RelevanceExact          = "match_exato"
+	RelevanceIrrelevant = "irrelevante"
+	RelevanceLow        = "pouco_relevante"
+	RelevanceModerate   = "relevante"
+	RelevanceHigh       = "muito_relevante"
+	RelevanceExact      = "match_exato"
 )
 
 // Níveis de confiança (usados pela AI)
@@ -85,8 +85,8 @@ type ServiceDocument struct {
 // SearchResponse representa a resposta de uma busca
 type SearchResponse struct {
 	Results       []*ServiceDocument     `json:"results"`
-	TotalCount    int                    `json:"total_count"`     // Total original do Typesense
-	FilteredCount int                    `json:"filtered_count"`  // Após aplicar thresholds
+	TotalCount    int                    `json:"total_count"`    // Total original do Typesense
+	FilteredCount int                    `json:"filtered_count"` // Após aplicar thresholds
 	Page          int                    `json:"page"`
 	PerPage       int                    `json:"per_page"`
 	SearchType    SearchType             `json:"search_type"`

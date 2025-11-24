@@ -67,9 +67,9 @@ func (cs *CategoryService) GetCategories(ctx context.Context, req *models.Catego
 		Categories:      categories,
 		TotalCategories: len(categories),
 		Metadata: map[string]interface{}{
-			"timestamp":          time.Now().Format(time.RFC3339),
-			"popularity_source":  "hardcoded",
-			"note":               "Aguardando integração Google Analytics",
+			"timestamp":         time.Now().Format(time.RFC3339),
+			"popularity_source": "hardcoded",
+			"note":              "Aguardando integração Google Analytics",
 		},
 	}
 

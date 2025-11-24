@@ -71,7 +71,7 @@ func (h *TombamentoHandler) CreateTombamento(c *gin.Context) {
 	existingTombamento, _ := h.typesenseClient.GetTombamentoByOldServiceID(ctx, request.Origem, request.IDServicoAntigo)
 	if existingTombamento != nil {
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "Já existe um tombamento para este serviço antigo",
+			"error":                "Já existe um tombamento para este serviço antigo",
 			"tombamento_existente": existingTombamento,
 		})
 		return

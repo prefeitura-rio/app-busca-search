@@ -20,6 +20,9 @@ type Config struct {
 	// Tracing configuration
 	TracingEnabled  bool
 	TracingEndpoint string
+
+	// Gateway configuration for URL wrapping
+	GatewayBaseURL string
 }
 
 func LoadConfig() *Config {
@@ -39,6 +42,9 @@ func LoadConfig() *Config {
 		// Tracing configuration
 		TracingEnabled:  getEnv("TRACING_ENABLED", "false") == "true",
 		TracingEndpoint: getEnv("TRACING_ENDPOINT", "localhost:4317"),
+
+		// Gateway configuration
+		GatewayBaseURL: getEnv("GATEWAY_BASE_URL", ""),
 	}
 }
 
