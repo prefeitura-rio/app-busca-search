@@ -53,15 +53,8 @@ func (h *TombamentoHandler) CreateTombamento(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// Verifica se o serviço antigo existe na collection de origem
-	_, err := h.typesenseClient.BuscaPorID(request.Origem, request.IDServicoAntigo)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Serviço antigo não encontrado na collection " + request.Origem})
-		return
-	}
-
 	// Verifica se o serviço novo existe na prefrio_services_base
-	_, err = h.typesenseClient.GetPrefRioService(ctx, request.IDServicoNovo)
+	_, err := h.typesenseClient.GetPrefRioService(ctx, request.IDServicoNovo)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Serviço novo não encontrado na collection prefrio_services_base"})
 		return
@@ -216,13 +209,6 @@ func (h *TombamentoHandler) UpdateTombamento(c *gin.Context) {
 	existingTombamento, err := h.typesenseClient.GetTombamento(ctx, tombamentoID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Tombamento não encontrado"})
-		return
-	}
-
-	// Verifica se o serviço antigo existe na collection de origem
-	_, err = h.typesenseClient.BuscaPorID(request.Origem, request.IDServicoAntigo)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Serviço antigo não encontrado na collection " + request.Origem})
 		return
 	}
 

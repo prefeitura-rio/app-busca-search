@@ -389,13 +389,6 @@ func (h *AdminHandler) PublishService(c *gin.Context) {
 			return
 		}
 
-		// Verifica se o serviço antigo existe
-		_, err := h.typesenseClient.BuscaPorID(origem, idServicoAntigo)
-		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço antigo não encontrado na collection " + origem})
-			return
-		}
-
 		// Verifica se já existe tombamento
 		existingTombamento, _ := h.typesenseClient.GetTombamentoByOldServiceID(ctx, origem, idServicoAntigo)
 		if existingTombamento != nil {
