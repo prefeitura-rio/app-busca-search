@@ -50,9 +50,11 @@ func main() {
 
 	cfg := config.LoadConfig()
 
+	// Cliente Typesense com timeout maior para operações de migração (10 minutos)
 	typesenseClient := typesense.NewClient(
 		typesense.WithServer(fmt.Sprintf("%s://%s:%s", cfg.TypesenseProtocol, cfg.TypesenseHost, cfg.TypesensePort)),
 		typesense.WithAPIKey(cfg.TypesenseAPIKey),
+		typesense.WithConnectionTimeout(10*time.Minute),
 	)
 
 	schemaRegistry := schemas.NewRegistry()
@@ -70,7 +72,7 @@ func main() {
 	case "history":
 		cmdHistory(ctx, migrationService)
 	case "schemas":
-		cmdSchemas(schemaRegistry)
+		cmdSchemas(ctx, schemaRegistry, migrationService)
 	default:
 		fmt.Fprintf(os.Stderr, "Comando desconhecido: %s\n", command)
 		flag.Usage()
@@ -106,16 +108,26 @@ func cmdStart(ctx context.Context, ms *services.MigrationService) {
 		return
 	}
 
-	fmt.Println("\n✅ Migração iniciada com sucesso!")
-	fmt.Printf("   Status: %s\n", response.Status)
-	fmt.Printf("   Schema: %s\n", response.SchemaVersion)
-	fmt.Printf("   Collection destino: %s\n", response.TargetCollection)
-	fmt.Printf("   Backup: %s\n", response.BackupCollection)
-	fmt.Printf("   Documentos: %d\n", response.TotalDocuments)
+	if response.Status == models.MigrationStatusCompleted {
+		fmt.Println("\n✅ Migração concluída com sucesso!")
+	} else if response.Status == models.MigrationStatusFailed {
+		fmt.Println("\n❌ Migração falhou!")
+	} else {
+		fmt.Println("\n✅ Migração iniciada!")
+	}
 
-	if response.Status == models.MigrationStatusInProgress {
-		fmt.Println("\n⏳ A migração está sendo executada em background.")
-		fmt.Println("   Use 'migrate status' para acompanhar o progresso.")
+	fmt.Printf("   Status: %s\n", formatStatus(response.Status))
+	fmt.Printf("   Schema: %s\n", response.SchemaVersion)
+	if response.TargetCollection != "" {
+		fmt.Printf("   Collection destino: %s\n", response.TargetCollection)
+	}
+	if response.BackupCollection != "" {
+		fmt.Printf("   Backup: %s\n", response.BackupCollection)
+	}
+	fmt.Printf("   Documentos: %d/%d\n", response.MigratedDocuments, response.TotalDocuments)
+
+	if response.ErrorMessage != "" {
+		fmt.Printf("   Erro: %s\n", response.ErrorMessage)
 	}
 }
 
@@ -217,9 +229,11 @@ func cmdHistory(ctx context.Context, ms *services.MigrationService) {
 	}
 }
 
-func cmdSchemas(registry *schemas.Registry) {
+func cmdSchemas(ctx context.Context, registry *schemas.Registry, ms *services.MigrationService) {
 	versions := registry.ListVersions()
-	currentVersion := registry.GetCurrentVersion()
+	
+	// Consulta a versão real em uso no Typesense
+	currentVersion := ms.GetCurrentSchemaVersion(ctx)
 
 	if *jsonOutput {
 		printJSON(map[string]interface{}{
@@ -231,7 +245,7 @@ func cmdSchemas(registry *schemas.Registry) {
 
 	fmt.Println("📋 Schemas Disponíveis")
 	fmt.Println("---------------------")
-	fmt.Printf("Versão atual: %s\n\n", currentVersion)
+	fmt.Printf("Versão em uso: %s (consultado do Typesense)\n\n", currentVersion)
 	fmt.Println("Versões disponíveis:")
 	for _, v := range versions {
 		marker := "  "

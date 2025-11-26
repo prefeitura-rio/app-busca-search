@@ -94,7 +94,22 @@ func (ms *MigrationService) StartMigration(ctx context.Context, req *models.Migr
 		return nil, fmt.Errorf("erro ao contar documentos: %v", err)
 	}
 
-	previousVersion := ms.schemaRegistry.GetCurrentVersion()
+	previousVersion := ms.GetCurrentSchemaVersion(ctx)
+
+	// Dry-run: retorna simulação sem criar nada no Typesense
+	if req.DryRun {
+		return &models.MigrationStatusResponse{
+			Status:            models.MigrationStatusIdle,
+			SchemaVersion:     req.SchemaVersion,
+			SourceCollection:  PrefRioServicesCollection,
+			TargetCollection:  targetCollectionName,
+			BackupCollection:  backupCollectionName,
+			TotalDocuments:    totalDocs,
+			MigratedDocuments: 0,
+			Progress:          0,
+			IsLocked:          false,
+		}, nil
+	}
 
 	migration := &models.MigrationControl{
 		Status:                models.MigrationStatusInProgress,
@@ -116,37 +131,56 @@ func (ms *MigrationService) StartMigration(ctx context.Context, req *models.Migr
 		return nil, fmt.Errorf("erro ao criar registro de migração: %v", err)
 	}
 
-	if req.DryRun {
-		createdMigration.Status = models.MigrationStatusCompleted
-		createdMigration.IsLocked = false
-		createdMigration.CompletedAt = time.Now().Unix()
-		ms.updateMigrationControl(ctx, createdMigration.ID, createdMigration)
-		
+	if req.Async {
+		// Execução assíncrona (para API - servidor fica rodando)
+		go ms.executeMigration(context.Background(), createdMigration, schema)
+
 		return &models.MigrationStatusResponse{
-			Status:           models.MigrationStatusCompleted,
-			SchemaVersion:    req.SchemaVersion,
-			SourceCollection: PrefRioServicesCollection,
-			TargetCollection: targetCollectionName,
-			BackupCollection: backupCollectionName,
-			TotalDocuments:   totalDocs,
-			IsLocked:         false,
+			Status:            models.MigrationStatusInProgress,
+			SchemaVersion:     req.SchemaVersion,
+			SourceCollection:  PrefRioServicesCollection,
+			TargetCollection:  targetCollectionName,
+			BackupCollection:  backupCollectionName,
+			StartedAt:         createdMigration.StartedAt,
+			StartedBy:         userName,
+			TotalDocuments:    totalDocs,
+			MigratedDocuments: 0,
+			Progress:          0,
+			IsLocked:          true,
 		}, nil
 	}
 
-	go ms.executeMigration(context.Background(), createdMigration, schema)
+	// Execução síncrona (para CLI - aguarda conclusão)
+	// Usa contexto sem timeout para operações longas de migração
+	ms.executeMigration(context.Background(), createdMigration, schema)
+
+	// Busca status atualizado após execução
+	updatedMigration, _ := ms.getMigrationControl(ctx, createdMigration.ID)
+	if updatedMigration != nil {
+		progress := float64(0)
+		if updatedMigration.TotalDocuments > 0 {
+			progress = float64(updatedMigration.MigratedDocuments) / float64(updatedMigration.TotalDocuments) * 100
+		}
+		return &models.MigrationStatusResponse{
+			Status:            updatedMigration.Status,
+			SchemaVersion:     updatedMigration.SchemaVersion,
+			SourceCollection:  updatedMigration.SourceCollection,
+			TargetCollection:  updatedMigration.TargetCollection,
+			BackupCollection:  updatedMigration.BackupCollection,
+			StartedAt:         updatedMigration.StartedAt,
+			CompletedAt:       updatedMigration.CompletedAt,
+			StartedBy:         updatedMigration.StartedBy,
+			TotalDocuments:    updatedMigration.TotalDocuments,
+			MigratedDocuments: updatedMigration.MigratedDocuments,
+			Progress:          progress,
+			ErrorMessage:      updatedMigration.ErrorMessage,
+			IsLocked:          updatedMigration.IsLocked,
+		}, nil
+	}
 
 	return &models.MigrationStatusResponse{
-		Status:            models.MigrationStatusInProgress,
-		SchemaVersion:     req.SchemaVersion,
-		SourceCollection:  PrefRioServicesCollection,
-		TargetCollection:  targetCollectionName,
-		BackupCollection:  backupCollectionName,
-		StartedAt:         createdMigration.StartedAt,
-		StartedBy:         userName,
-		TotalDocuments:    totalDocs,
-		MigratedDocuments: 0,
-		Progress:          0,
-		IsLocked:          true,
+		Status:       models.MigrationStatusCompleted,
+		SchemaVersion: req.SchemaVersion,
 	}, nil
 }
 
@@ -333,72 +367,18 @@ func (ms *MigrationService) validateMigration(ctx context.Context, migration *mo
 	return nil
 }
 
-// swapCollections troca as collections (renomeia a antiga e a nova)
+// swapCollections atualiza o alias para apontar para a nova collection
+// O backup já foi criado anteriormente, então não precisamos de cópia extra
 func (ms *MigrationService) swapCollections(ctx context.Context, migration *models.MigrationControl) error {
-	oldCollectionName := fmt.Sprintf("%s_old_%d", migration.SourceCollection, time.Now().Unix())
-
-	_, err := ms.client.Collection(migration.SourceCollection).Retrieve(ctx)
-	if err == nil {
-		aliasSchema := &api.CollectionAliasSchema{
-			CollectionName: oldCollectionName,
-		}
-		
-		existingDocs, _ := ms.fetchDocuments(ctx, migration.SourceCollection, 1, 1)
-		if len(existingDocs) > 0 {
-			sourceSchema, err := ms.client.Collection(migration.SourceCollection).Retrieve(ctx)
-			if err != nil {
-				return fmt.Errorf("erro ao obter schema da collection origem: %v", err)
-			}
-
-			oldSchema := &api.CollectionSchema{
-				Name:                oldCollectionName,
-				Fields:              sourceSchema.Fields,
-				DefaultSortingField: sourceSchema.DefaultSortingField,
-				EnableNestedFields:  sourceSchema.EnableNestedFields,
-			}
-			_, err = ms.client.Collections().Create(ctx, oldSchema)
-			if err != nil && !strings.Contains(err.Error(), "already exists") {
-				return fmt.Errorf("erro ao criar collection antiga: %v", err)
-			}
-
-			allDocs := []map[string]interface{}{}
-			page := 1
-			for {
-				docs, err := ms.fetchDocuments(ctx, migration.SourceCollection, page, 250)
-				if err != nil {
-					return fmt.Errorf("erro ao buscar documentos para mover: %v", err)
-				}
-				if len(docs) == 0 {
-					break
-				}
-				allDocs = append(allDocs, docs...)
-				if len(docs) < 250 {
-					break
-				}
-				page++
-			}
-
-			if err := ms.importDocuments(ctx, oldCollectionName, allDocs); err != nil {
-				return fmt.Errorf("erro ao copiar documentos para collection antiga: %v", err)
-			}
-		}
-
-		_, err = ms.client.Aliases().Upsert(ctx, migration.SourceCollection, aliasSchema)
-		if err != nil {
-			log.Printf("[Migration] Aviso: não foi possível criar alias, deletando collection antiga: %v", err)
-			_, delErr := ms.client.Collection(migration.SourceCollection).Delete(ctx)
-			if delErr != nil {
-				return fmt.Errorf("erro ao deletar collection original: %v", delErr)
-			}
-		}
-	}
-
+	// Simplesmente atualiza o alias para apontar para a nova collection
+	// O backup em prefrio_services_backup_* já garante a segurança dos dados
 	aliasSchema := &api.CollectionAliasSchema{
 		CollectionName: migration.TargetCollection,
 	}
-	_, err = ms.client.Aliases().Upsert(ctx, PrefRioServicesCollection, aliasSchema)
+	
+	_, err := ms.client.Aliases().Upsert(ctx, PrefRioServicesCollection, aliasSchema)
 	if err != nil {
-		return fmt.Errorf("erro ao criar alias para nova collection: %v", err)
+		return fmt.Errorf("erro ao atualizar alias para nova collection: %v", err)
 	}
 
 	log.Printf("[Migration] Alias %s agora aponta para %s", PrefRioServicesCollection, migration.TargetCollection)
@@ -528,6 +508,16 @@ func (ms *MigrationService) IsMigrationLocked(ctx context.Context) (bool, error)
 	}
 
 	return false, nil
+}
+
+// GetCurrentSchemaVersion retorna a versão do schema atualmente em uso
+// Consulta o Typesense para obter a última migração completada
+func (ms *MigrationService) GetCurrentSchemaVersion(ctx context.Context) string {
+	migration, err := ms.getLatestCompletedMigration(ctx)
+	if err != nil || migration == nil {
+		return "v1" // Baseline padrão se não houver migrações
+	}
+	return migration.SchemaVersion
 }
 
 // ========== Métodos auxiliares ==========

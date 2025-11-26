@@ -34,6 +34,7 @@ type MigrationControl struct {
 type MigrationStartRequest struct {
 	SchemaVersion string `json:"schema_version" validate:"required"`
 	DryRun        bool   `json:"dry_run,omitempty"`
+	Async         bool   `json:"async,omitempty"` // Se true, executa em background (para API)
 }
 
 // MigrationStatusResponse representa a resposta de status de migração

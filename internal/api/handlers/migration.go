@@ -53,6 +53,9 @@ func (h *MigrationHandler) StartMigration(c *gin.Context) {
 		return
 	}
 
+	// API sempre executa de forma assíncrona (servidor fica rodando)
+	request.Async = true
+
 	userName := middlewares.GetUserName(c)
 	userCPF := middlewares.GetUserCPF(c)
 
@@ -157,14 +160,16 @@ func (h *MigrationHandler) GetHistory(c *gin.Context) {
 
 // ListSchemas godoc
 // @Summary Lista os schemas disponíveis
-// @Description Retorna a lista de versões de schema disponíveis para migração
+// @Description Retorna a lista de versões de schema disponíveis para migração. A versão atual é consultada do Typesense.
 // @Tags migration
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/admin/migration/schemas [get]
 func (h *MigrationHandler) ListSchemas(c *gin.Context) {
 	versions := h.schemaRegistry.ListVersions()
-	currentVersion := h.schemaRegistry.GetCurrentVersion()
+	
+	// Consulta a versão real em uso no Typesense
+	currentVersion := h.migrationService.GetCurrentSchemaVersion(c.Request.Context())
 
 	c.JSON(http.StatusOK, gin.H{
 		"current_version":    currentVersion,
