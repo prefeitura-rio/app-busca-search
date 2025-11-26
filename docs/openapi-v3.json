@@ -16,6 +16,321 @@
     "version": "1.0"
   },
   "paths": {
+    "/api/v1/admin/migration/history": {
+      "get": {
+        "description": "Retorna o histórico completo de migrações com paginação",
+        "tags": [
+          "migration"
+        ],
+        "summary": "Lista o histórico de migrações",
+        "parameters": [
+          {
+            "description": "Página",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "description": "Resultados por página",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MigrationHistoryResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/migration/rollback": {
+      "post": {
+        "description": "Restaura a collection para o backup da última migração",
+        "tags": [
+          "migration"
+        ],
+        "summary": "Executa rollback para a versão anterior",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.MigrationRollbackRequest"
+              }
+            }
+          },
+          "description": "Dados do rollback"
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MigrationStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/migration/schemas": {
+      "get": {
+        "description": "Retorna a lista de versões de schema disponíveis para migração. A versão atual é consultada do Typesense.",
+        "tags": [
+          "migration"
+        ],
+        "summary": "Lista os schemas disponíveis",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/migration/start": {
+      "post": {
+        "description": "Inicia o processo de migração para uma nova versão de schema. O sistema será bloqueado para operações CUD durante a migração.",
+        "tags": [
+          "migration"
+        ],
+        "summary": "Inicia uma migração de schema",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/models.MigrationStartRequest"
+              }
+            }
+          },
+          "description": "Dados da migração",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MigrationStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/migration/status": {
+      "get": {
+        "description": "Retorna o status da migração em andamento ou o último estado conhecido",
+        "tags": [
+          "migration"
+        ],
+        "summary": "Obtém o status atual da migração",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.MigrationStatusResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/admin/services": {
       "get": {
         "description": "Lista serviços com paginação e filtros opcionais. Cada serviço na resposta inclui campos plaintext gerados automaticamente (resumo_plaintext, resultado_solicitacao_plaintext, descricao_completa_plaintext, documentos_necessarios_plaintext, instrucoes_solicitante_plaintext) que removem toda formatação markdown.",
@@ -2080,6 +2395,148 @@
             }
           },
           "total_services": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.MigrationHistoryItem": {
+        "type": "object",
+        "properties": {
+          "completed_at": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "previous_schema_version": {
+            "type": "string"
+          },
+          "schema_version": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "integer"
+          },
+          "started_by": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/models.MigrationStatus"
+          },
+          "total_documents": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.MigrationHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "integer"
+          },
+          "migrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.MigrationHistoryItem"
+            }
+          },
+          "out_of": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.MigrationRollbackRequest": {
+        "type": "object",
+        "properties": {
+          "migration_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "models.MigrationStartRequest": {
+        "type": "object",
+        "required": [
+          "schema_version"
+        ],
+        "properties": {
+          "async": {
+            "description": "Se true, executa em background (para API)",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "schema_version": {
+            "type": "string"
+          }
+        }
+      },
+      "models.MigrationStatus": {
+        "type": "string",
+        "enum": [
+          "idle",
+          "in_progress",
+          "completed",
+          "failed",
+          "rollback"
+        ],
+        "x-enum-varnames": [
+          "MigrationStatusIdle",
+          "MigrationStatusInProgress",
+          "MigrationStatusCompleted",
+          "MigrationStatusFailed",
+          "MigrationStatusRollback"
+        ]
+      },
+      "models.MigrationStatusResponse": {
+        "type": "object",
+        "properties": {
+          "backup_collection": {
+            "type": "string"
+          },
+          "completed_at": {
+            "type": "integer"
+          },
+          "error_message": {
+            "type": "string"
+          },
+          "is_locked": {
+            "type": "boolean"
+          },
+          "migrated_documents": {
+            "type": "integer"
+          },
+          "progress": {
+            "type": "number"
+          },
+          "schema_version": {
+            "type": "string"
+          },
+          "source_collection": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "integer"
+          },
+          "started_by": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/models.MigrationStatus"
+          },
+          "target_collection": {
+            "type": "string"
+          },
+          "total_documents": {
             "type": "integer"
           }
         }
