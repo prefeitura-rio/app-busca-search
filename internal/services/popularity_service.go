@@ -22,6 +22,11 @@ func (ps *PopularityService) GetCategoryPopularity(category string) int {
 	return 0
 }
 
+// GetAllCategories retorna todas as categorias conhecidas com seus scores
+func (ps *PopularityService) GetAllCategories() map[string]int {
+	return ps.categoryScores
+}
+
 // getHardcodedCategoryScores retorna scores temporários de popularidade
 // TODO: Substituir por dados do Google Analytics quando disponível
 func getHardcodedCategoryScores() map[string]int {

@@ -54,8 +54,10 @@ func (cs *CategoryService) GetCategories(ctx context.Context, req *models.Catego
 		cat.PopularityScore = cs.popularityService.GetCategoryPopularity(cat.Name)
 	}
 
-	// 3. Filtrar categorias vazias se solicitado
-	if !req.IncludeEmpty {
+	// 3. Se include_empty, mesclar com categorias hardcoded que não vieram nos facets
+	if req.IncludeEmpty {
+		categories = cs.mergeWithKnownCategories(categories)
+	} else {
 		categories = cs.filterNonEmpty(categories)
 	}
 
@@ -312,6 +314,26 @@ func (cs *CategoryService) filterNonEmpty(categories []*models.Category) []*mode
 		}
 	}
 	return filtered
+}
+
+// mergeWithKnownCategories adiciona categorias da lista de popularidade que não vieram nos facets
+func (cs *CategoryService) mergeWithKnownCategories(categories []*models.Category) []*models.Category {
+	existing := make(map[string]bool)
+	for _, cat := range categories {
+		existing[cat.Name] = true
+	}
+
+	for name, score := range cs.popularityService.GetAllCategories() {
+		if !existing[name] {
+			categories = append(categories, &models.Category{
+				Name:            name,
+				Count:           0,
+				PopularityScore: score,
+			})
+		}
+	}
+
+	return categories
 }
 
 // sortCategories ordena categorias conforme critério
