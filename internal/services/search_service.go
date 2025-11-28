@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -1165,6 +1166,30 @@ func normalizeTextMatch(score float64) float64 {
 	return math.Min(1.0, normalized)
 }
 
+// calculateRecencyFactor calcula o fator de recência baseado em last_update
+// Docs atualizados nos últimos 30 dias: fator = 1.0
+// Docs mais antigos: decaimento exponencial até 0.5 em ~1 ano
+func calculateRecencyFactor(lastUpdateTimestamp int64) float64 {
+	if lastUpdateTimestamp <= 0 {
+		return 0.5 // Docs sem data recebem fator mínimo
+	}
+
+	now := time.Now().Unix()
+	daysSinceUpdate := float64(now-lastUpdateTimestamp) / 86400.0 // segundos para dias
+
+	const gracePeriodDays = 30.0 // período sem penalidade
+	const lambda = 0.00207       // decay rate: ~0.5 em 365 dias após período de graça
+
+	if daysSinceUpdate <= gracePeriodDays {
+		return 1.0
+	}
+
+	daysAfterGrace := daysSinceUpdate - gracePeriodDays
+	factor := math.Exp(-lambda * daysAfterGrace)
+
+	return math.Max(0.5, factor) // mínimo de 0.5
+}
+
 // buildFilterBy constrói a expressão de filtro baseada no SearchRequest
 func buildFilterBy(req *models.SearchRequest) string {
 	var filters []string
@@ -1361,6 +1386,15 @@ func (ss *SearchService) applyScoreThreshold(
 
 		scoreInfo.PassedThreshold = passes
 
+		// Aplicar recency boost se habilitado
+		finalScore := normalizedScore
+		if req.RecencyBoost {
+			recencyFactor := calculateRecencyFactor(doc.UpdatedAt)
+			scoreInfo.RecencyFactor = &recencyFactor
+			finalScore = normalizedScore * recencyFactor
+			scoreInfo.FinalScore = &finalScore
+		}
+
 		// Adicionar ScoreInfo ao metadata do documento
 		if doc.Metadata == nil {
 			doc.Metadata = make(map[string]interface{})
@@ -1377,6 +1411,15 @@ func (ss *SearchService) applyScoreThreshold(
 		}
 	}
 
+	// Se recency boost está habilitado, reordenar por final_score
+	if req.RecencyBoost && len(filtered) > 1 {
+		sort.Slice(filtered, func(i, j int) bool {
+			scoreI := getFinalScoreFromMetadata(filtered[i])
+			scoreJ := getFinalScoreFromMetadata(filtered[j])
+			return scoreI > scoreJ
+		})
+	}
+
 	// Metadata sobre a filtragem (só incluir se threshold foi aplicado)
 	var filterMeta map[string]interface{}
 	if threshold != nil {
@@ -1389,5 +1432,23 @@ func (ss *SearchService) applyScoreThreshold(
 		}
 	}
 
+	if req.RecencyBoost {
+		if filterMeta == nil {
+			filterMeta = make(map[string]interface{})
+		}
+		filterMeta["recency_boost_applied"] = true
+	}
+
 	return filtered, filterMeta
+}
+
+// getFinalScoreFromMetadata extrai o final_score do metadata do documento
+func getFinalScoreFromMetadata(doc *models.ServiceDocument) float64 {
+	if doc.Metadata == nil {
+		return 0
+	}
+	if scoreInfo, ok := doc.Metadata["score_info"].(*models.ScoreInfo); ok && scoreInfo.FinalScore != nil {
+		return *scoreInfo.FinalScore
+	}
+	return 0
 }

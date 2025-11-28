@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 // TestScoreNormalizationComparison demonstra a diferença entre normalização antiga e nova
@@ -138,4 +139,82 @@ func TestMinMaxEdgeCases(t *testing.T) {
 			t.Errorf("Expected %.3f for middle result, got %.3f", expected, similarity)
 		}
 	})
+}
+
+// TestRecencyFactor testa o cálculo do fator de recência
+func TestRecencyFactor(t *testing.T) {
+	now := time.Now().Unix()
+
+	t.Run("Doc atualizado hoje", func(t *testing.T) {
+		factor := calculateRecencyFactor(now)
+		if factor != 1.0 {
+			t.Errorf("Expected 1.0 for doc updated today, got %.3f", factor)
+		}
+	})
+
+	t.Run("Doc atualizado há 15 dias", func(t *testing.T) {
+		timestamp := now - (15 * 86400) // 15 dias atrás
+		factor := calculateRecencyFactor(timestamp)
+		if factor != 1.0 {
+			t.Errorf("Expected 1.0 for doc updated 15 days ago (within grace period), got %.3f", factor)
+		}
+	})
+
+	t.Run("Doc atualizado há 30 dias", func(t *testing.T) {
+		timestamp := now - (30 * 86400) // 30 dias atrás
+		factor := calculateRecencyFactor(timestamp)
+		if factor != 1.0 {
+			t.Errorf("Expected 1.0 for doc updated exactly 30 days ago, got %.3f", factor)
+		}
+	})
+
+	t.Run("Doc atualizado há 60 dias", func(t *testing.T) {
+		timestamp := now - (60 * 86400) // 60 dias atrás
+		factor := calculateRecencyFactor(timestamp)
+		// 30 dias após período de graça, deve ter decaimento
+		if factor >= 1.0 || factor < 0.9 {
+			t.Errorf("Expected factor between 0.9 and 1.0 for doc updated 60 days ago, got %.3f", factor)
+		}
+	})
+
+	t.Run("Doc atualizado há 365 dias", func(t *testing.T) {
+		timestamp := now - (365 * 86400) // 365 dias atrás
+		factor := calculateRecencyFactor(timestamp)
+		// 335 dias após período de graça, deve estar próximo de 0.5
+		if factor > 0.6 || factor < 0.5 {
+			t.Errorf("Expected factor around 0.5 for doc updated 365 days ago, got %.3f", factor)
+		}
+	})
+
+	t.Run("Doc muito antigo (2 anos)", func(t *testing.T) {
+		timestamp := now - (730 * 86400) // 2 anos atrás
+		factor := calculateRecencyFactor(timestamp)
+		// Deve retornar o mínimo de 0.5
+		if factor != 0.5 {
+			t.Errorf("Expected minimum factor 0.5 for very old doc, got %.3f", factor)
+		}
+	})
+
+	t.Run("Doc sem data", func(t *testing.T) {
+		factor := calculateRecencyFactor(0)
+		if factor != 0.5 {
+			t.Errorf("Expected 0.5 for doc without date, got %.3f", factor)
+		}
+	})
+}
+
+// TestRecencyFactorDemo demonstra o decaimento ao longo do tempo
+func TestRecencyFactorDemo(t *testing.T) {
+	now := time.Now().Unix()
+
+	fmt.Println("\n=== Demonstração do Recency Factor ===")
+	fmt.Println("Dias desde update | Fator")
+	fmt.Println("------------------|-------")
+
+	testDays := []int{0, 7, 15, 30, 45, 60, 90, 120, 180, 270, 365, 500, 730}
+	for _, days := range testDays {
+		timestamp := now - int64(days*86400)
+		factor := calculateRecencyFactor(timestamp)
+		fmt.Printf("%17d | %.3f\n", days, factor)
+	}
 }
