@@ -2280,6 +2280,104 @@
           }
         ]
       }
+    },
+    "/health": {
+      "get": {
+        "description": "Verifica a saúde completa da aplicação (para monitoramento externo de uptime)",
+        "tags": [
+          "health"
+        ],
+        "summary": "Comprehensive health check endpoint",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/handlers.HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/handlers.HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/liveness": {
+      "get": {
+        "description": "Verifica se a aplicação está viva (sem checagem de dependências externas)",
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness probe endpoint",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/handlers.HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/readiness": {
+      "get": {
+        "description": "Verifica se a aplicação está pronta para receber tráfego (valida Typesense)",
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness probe endpoint",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/handlers.HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/handlers.HealthResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
     }
   },
   "servers": [
@@ -2294,6 +2392,26 @@
   ],
   "components": {
     "schemas": {
+      "handlers.HealthResponse": {
+        "type": "object",
+        "properties": {
+          "checks": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "integer"
+          }
+        }
+      },
       "models.AgentsConfig": {
         "type": "object",
         "properties": {
