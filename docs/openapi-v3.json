@@ -2170,6 +2170,15 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "description": "Aplica boost por recência: docs atualizados nos últimos 30 dias mantêm score, docs mais antigos sofrem decay gradual",
+            "name": "recency_boost",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
