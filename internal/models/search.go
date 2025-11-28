@@ -52,6 +52,8 @@ type ScoreInfo struct {
 	TextMatchNormalized *float64 `json:"text_match_normalized,omitempty"` // Score normalizado 0-1 do text_match
 	VectorSimilarity    *float64 `json:"vector_similarity,omitempty"`     // Similaridade vetorial 0-1 (1 = idêntico)
 	HybridScore         *float64 `json:"hybrid_score,omitempty"`          // Score híbrido combinado 0-1
+	RecencyFactor       *float64 `json:"recency_factor,omitempty"`        // Fator de recência aplicado (1.0 = recente, decai com o tempo)
+	FinalScore          *float64 `json:"final_score,omitempty"`           // Score final após aplicar recency boost
 	ThresholdApplied    string   `json:"threshold_applied,omitempty"`     // Tipo de threshold aplicado: "keyword", "semantic", "hybrid", "none"
 	ThresholdValue      *float64 `json:"threshold_value,omitempty"`       // Valor do threshold aplicado
 	PassedThreshold     bool     `json:"passed_threshold"`                // Se passou no threshold
@@ -68,6 +70,7 @@ type SearchRequest struct {
 	ScoreThreshold        *ScoreThreshold `form:"score_threshold,omitempty"`
 	ExcludeAgentExclusive *bool           `form:"exclude_agent_exclusive"`
 	GenerateScores        bool            `form:"generate_scores"` // Gerar AI scores via LLM (apenas para type=ai)
+	RecencyBoost          bool            `form:"recency_boost"`   // Aplica boost por recência (docs recentes têm score maior)
 }
 
 // ServiceDocument representa um documento de serviço retornado pela busca

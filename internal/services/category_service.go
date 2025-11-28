@@ -54,8 +54,10 @@ func (cs *CategoryService) GetCategories(ctx context.Context, req *models.Catego
 		cat.PopularityScore = cs.popularityService.GetCategoryPopularity(cat.Name)
 	}
 
-	// 3. Filtrar categorias vazias se solicitado
-	if !req.IncludeEmpty {
+	// 3. Se include_empty, mesclar com categorias hardcoded que não vieram nos facets
+	if req.IncludeEmpty {
+		categories = cs.mergeWithKnownCategories(categories)
+	} else {
 		categories = cs.filterNonEmpty(categories)
 	}
 
@@ -106,9 +108,10 @@ func (cs *CategoryService) fetchCategoriesWithFacets(ctx context.Context, includ
 
 	// Query com facet em tema_geral
 	searchParams := &api.SearchCollectionParams{
-		Q:       pointer.String("*"),
-		FacetBy: pointer.String("tema_geral"),
-		PerPage: pointer.Int(0),
+		Q:              pointer.String("*"),
+		FacetBy:        pointer.String("tema_geral"),
+		MaxFacetValues: pointer.Int(250),
+		PerPage:        pointer.Int(0),
 	}
 
 	// Adicionar filtro apenas se não estiver vazio
@@ -198,13 +201,14 @@ func (cs *CategoryService) extractCategoriesFromFacets(result *api.SearchResult)
 // getServicesByCategory busca serviços de uma categoria específica
 func (cs *CategoryService) getServicesByCategory(ctx context.Context, category string, page, perPage int, includeInactive bool) ([]*models.ServiceDocument, int, error) {
 	// Construir filtro dinamicamente baseado em includeInactive
+	// Backticks são necessários para escapar caracteres especiais como parênteses
 	var filterBy string
 	if includeInactive {
 		// Apenas filtrar por categoria, sem filtro de status
-		filterBy = fmt.Sprintf("tema_geral:=%s", category)
+		filterBy = fmt.Sprintf("tema_geral:=`%s`", category)
 	} else {
 		// Filtrar por categoria E status publicado
-		filterBy = fmt.Sprintf("tema_geral:=%s && status:=1", category)
+		filterBy = fmt.Sprintf("tema_geral:=`%s` && status:=1", category)
 	}
 
 	searchParams := &api.SearchCollectionParams{
@@ -310,6 +314,26 @@ func (cs *CategoryService) filterNonEmpty(categories []*models.Category) []*mode
 		}
 	}
 	return filtered
+}
+
+// mergeWithKnownCategories adiciona categorias da lista de popularidade que não vieram nos facets
+func (cs *CategoryService) mergeWithKnownCategories(categories []*models.Category) []*models.Category {
+	existing := make(map[string]bool)
+	for _, cat := range categories {
+		existing[cat.Name] = true
+	}
+
+	for name, score := range cs.popularityService.GetAllCategories() {
+		if !existing[name] {
+			categories = append(categories, &models.Category{
+				Name:            name,
+				Count:           0,
+				PopularityScore: score,
+			})
+		}
+	}
+
+	return categories
 }
 
 // sortCategories ordena categorias conforme critério

@@ -1960,3 +1960,313 @@ func (c *Client) isLegacyCollectionTombado(ctx context.Context, collection, docu
 	// Se encontrou tombamento, retorna true (deve ser removido)
 	return err == nil
 }
+
+// ========== Funções de Controle de Migração ==========
+
+const MigrationControlCollection = "_migration_control"
+
+// createMigrationControlCollection cria a collection _migration_control com o schema apropriado
+func (c *Client) createMigrationControlCollection() error {
+	ctx := context.Background()
+
+	schema := &api.CollectionSchema{
+		Name: MigrationControlCollection,
+		Fields: []api.Field{
+			{Name: "id", Type: "string", Optional: boolPtr(true)},
+			{Name: "status", Type: "string", Facet: boolPtr(true)},
+			{Name: "source_collection", Type: "string", Facet: boolPtr(false)},
+			{Name: "target_collection", Type: "string", Facet: boolPtr(false)},
+			{Name: "backup_collection", Type: "string", Facet: boolPtr(false)},
+			{Name: "schema_version", Type: "string", Facet: boolPtr(true)},
+			{Name: "previous_schema_version", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "started_at", Type: "int64", Facet: boolPtr(false)},
+			{Name: "completed_at", Type: "int64", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "started_by", Type: "string", Facet: boolPtr(true)},
+			{Name: "started_by_cpf", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "total_documents", Type: "int32", Facet: boolPtr(false)},
+			{Name: "migrated_documents", Type: "int32", Facet: boolPtr(false)},
+			{Name: "error_message", Type: "string", Facet: boolPtr(false), Optional: boolPtr(true)},
+			{Name: "is_locked", Type: "bool", Facet: boolPtr(true)},
+		},
+		DefaultSortingField: stringPtr("started_at"),
+	}
+
+	_, err := c.client.Collections().Create(ctx, schema)
+	if err != nil {
+		return fmt.Errorf("erro ao criar collection %s: %v", MigrationControlCollection, err)
+	}
+
+	log.Printf("Collection %s criada com sucesso", MigrationControlCollection)
+	return nil
+}
+
+// EnsureMigrationControlCollectionExists verifica se a collection _migration_control existe e a cria se necessário
+func (c *Client) EnsureMigrationControlCollectionExists() error {
+	ctx := context.Background()
+
+	_, err := c.client.Collection(MigrationControlCollection).Retrieve(ctx)
+	if err == nil {
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not found") {
+		return c.createMigrationControlCollection()
+	}
+
+	return err
+}
+
+// CreateMigrationControl cria um novo registro de controle de migração
+func (c *Client) CreateMigrationControl(ctx context.Context, migration *models.MigrationControl) (*models.MigrationControl, error) {
+	if err := c.EnsureMigrationControlCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
+	migrationMap, err := c.structToMap(migration)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter migration para map: %v", err)
+	}
+
+	if migration.ID == "" {
+		delete(migrationMap, "id")
+	}
+
+	result, err := c.client.Collection(MigrationControlCollection).Documents().Create(ctx, migrationMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar migration control: %v", err)
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var createdMigration models.MigrationControl
+	if err := json.Unmarshal(resultBytes, &createdMigration); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &createdMigration, nil
+}
+
+// GetMigrationControl busca um registro de migração por ID
+func (c *Client) GetMigrationControl(ctx context.Context, id string) (*models.MigrationControl, error) {
+	if err := c.EnsureMigrationControlCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
+	result, err := c.client.Collection(MigrationControlCollection).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("migration control não encontrado: %v", err)
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var migration models.MigrationControl
+	if err := json.Unmarshal(resultBytes, &migration); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &migration, nil
+}
+
+// UpdateMigrationControl atualiza um registro de migração existente
+func (c *Client) UpdateMigrationControl(ctx context.Context, id string, migration *models.MigrationControl) (*models.MigrationControl, error) {
+	_, err := c.client.Collection(MigrationControlCollection).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("migration control não encontrado: %v", err)
+	}
+
+	migration.ID = id
+
+	migrationMap, err := c.structToMap(migration)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao converter migration para map: %v", err)
+	}
+
+	result, err := c.client.Collection(MigrationControlCollection).Document(id).Update(ctx, migrationMap, &api.DocumentIndexParameters{})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao atualizar migration control: %v", err)
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var updatedMigration models.MigrationControl
+	if err := json.Unmarshal(resultBytes, &updatedMigration); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	return &updatedMigration, nil
+}
+
+// GetActiveMigration busca a migração ativa (status = in_progress)
+func (c *Client) GetActiveMigration(ctx context.Context) (*models.MigrationControl, error) {
+	if err := c.EnsureMigrationControlCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
+	filterBy := "status:=in_progress"
+	searchParams := &api.SearchCollectionParams{
+		Q:        stringPtr("*"),
+		FilterBy: &filterBy,
+		Page:     intPtr(1),
+		PerPage:  intPtr(1),
+		SortBy:   stringPtr("started_at:desc"),
+	}
+
+	searchResult, err := c.client.Collection(MigrationControlCollection).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar migração ativa: %v", err)
+	}
+
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	if found, ok := resultMap["found"].(float64); ok && found > 0 {
+		if hits, ok := resultMap["hits"].([]interface{}); ok && len(hits) > 0 {
+			if hitMap, ok := hits[0].(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					docBytes, _ := json.Marshal(document)
+					var migration models.MigrationControl
+					if err := json.Unmarshal(docBytes, &migration); err == nil {
+						return &migration, nil
+					}
+				}
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// IsMigrationLocked verifica se existe uma migração em andamento (sistema bloqueado)
+func (c *Client) IsMigrationLocked(ctx context.Context) (bool, error) {
+	migration, err := c.GetActiveMigration(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if migration != nil && migration.IsLocked {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// ListMigrationHistory lista o histórico de migrações
+func (c *Client) ListMigrationHistory(ctx context.Context, page, perPage int) (*models.MigrationHistoryResponse, error) {
+	if err := c.EnsureMigrationControlCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
+	searchParams := &api.SearchCollectionParams{
+		Q:       stringPtr("*"),
+		Page:    intPtr(page),
+		PerPage: intPtr(perPage),
+		SortBy:  stringPtr("started_at:desc"),
+	}
+
+	searchResult, err := c.client.Collection(MigrationControlCollection).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar histórico de migrações: %v", err)
+	}
+
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	var migrations []models.MigrationHistoryItem
+	if hits, ok := resultMap["hits"].([]interface{}); ok {
+		for _, hit := range hits {
+			if hitMap, ok := hit.(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					docBytes, _ := json.Marshal(document)
+					var migration models.MigrationHistoryItem
+					if err := json.Unmarshal(docBytes, &migration); err == nil {
+						migrations = append(migrations, migration)
+					}
+				}
+			}
+		}
+	}
+
+	found := 0
+	outOf := 0
+	if foundFloat, ok := resultMap["found"].(float64); ok {
+		found = int(foundFloat)
+		outOf = found
+	}
+
+	return &models.MigrationHistoryResponse{
+		Found:      found,
+		OutOf:      outOf,
+		Page:       page,
+		Migrations: migrations,
+	}, nil
+}
+
+// GetLatestCompletedMigration busca a última migração completada com sucesso
+func (c *Client) GetLatestCompletedMigration(ctx context.Context) (*models.MigrationControl, error) {
+	if err := c.EnsureMigrationControlCollectionExists(); err != nil {
+		return nil, fmt.Errorf("erro ao verificar/criar collection: %v", err)
+	}
+
+	filterBy := "status:=completed"
+	searchParams := &api.SearchCollectionParams{
+		Q:        stringPtr("*"),
+		FilterBy: &filterBy,
+		Page:     intPtr(1),
+		PerPage:  intPtr(1),
+		SortBy:   stringPtr("completed_at:desc"),
+	}
+
+	searchResult, err := c.client.Collection(MigrationControlCollection).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar última migração: %v", err)
+	}
+
+	var resultMap map[string]interface{}
+	jsonData, err := json.Marshal(searchResult)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	if err := json.Unmarshal(jsonData, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	if found, ok := resultMap["found"].(float64); ok && found > 0 {
+		if hits, ok := resultMap["hits"].([]interface{}); ok && len(hits) > 0 {
+			if hitMap, ok := hits[0].(map[string]interface{}); ok {
+				if document, ok := hitMap["document"].(map[string]interface{}); ok {
+					docBytes, _ := json.Marshal(document)
+					var migration models.MigrationControl
+					if err := json.Unmarshal(docBytes, &migration); err == nil {
+						return &migration, nil
+					}
+				}
+			}
+		}
+	}
+
+	return nil, nil
+}

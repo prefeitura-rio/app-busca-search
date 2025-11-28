@@ -26,6 +26,22 @@ spec:
               value: "true"
             - name: TRACING_ENDPOINT
               value: "signoz-otel-collector.signoz.svc.cluster.local:4317"
+          livenessProbe:
+            httpGet:
+              path: /liveness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
           # resources:
           #   requests:
           #     cpu: 500m

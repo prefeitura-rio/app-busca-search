@@ -9,6 +9,7 @@ import (
 	"github.com/prefeitura-rio/app-busca-search/internal/api/handlers"
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
 	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
+	"github.com/prefeitura-rio/app-busca-search/internal/migration/schemas"
 	"github.com/prefeitura-rio/app-busca-search/internal/services"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 	swaggerFiles "github.com/swaggo/files"
@@ -60,6 +61,20 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	categoryService := services.NewCategoryService(typesenseClient.GetClient(), popularityService)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
 
+	// Initialize migration services
+	schemaRegistry := schemas.NewRegistry()
+	migrationService := services.NewMigrationService(typesenseClient.GetClient(), schemaRegistry)
+	migrationHandler := handlers.NewMigrationHandler(migrationService, schemaRegistry)
+	migrationLockMiddleware := middlewares.NewMigrationLockMiddleware(migrationService)
+
+	// Initialize health handler
+	healthHandler := handlers.NewHealthHandler(typesenseClient)
+
+	// Health check endpoints (no /api/v1 prefix for K8s probes and uptime monitoring)
+	r.GET("/liveness", healthHandler.Liveness)   // K8s liveness probe
+	r.GET("/readiness", healthHandler.Readiness) // K8s readiness probe
+	r.GET("/health", healthHandler.Health)       // Uptime monitoring (comprehensive)
+
 	api := r.Group("/api/v1")
 	{
 		// Unified search endpoints
@@ -75,37 +90,41 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	admin.Use(middlewares.JWTAuthMiddleware()) // Extrai dados do JWT
 	admin.Use(middlewares.RequireJWTAuth())    // Verifica apenas se está autenticado
 	{
-		services := admin.Group("/services")
+		// Rotas de serviços com bloqueio de CUD durante migrações
+		servicesGroup := admin.Group("/services")
+		servicesGroup.Use(migrationLockMiddleware.BlockCUD()) // Bloqueia CUD durante migrações
 		{
 			// Criar serviço
-			services.POST("", adminHandler.CreateService)
+			servicesGroup.POST("", adminHandler.CreateService)
 
-			// Listar serviços
-			services.GET("", adminHandler.ListServices)
+			// Listar serviços (GET não é bloqueado)
+			servicesGroup.GET("", adminHandler.ListServices)
 
-			// Buscar serviço por ID
-			services.GET("/:id", adminHandler.GetService)
+			// Buscar serviço por ID (GET não é bloqueado)
+			servicesGroup.GET("/:id", adminHandler.GetService)
 
 			// Atualizar serviço
-			services.PUT("/:id", adminHandler.UpdateService)
+			servicesGroup.PUT("/:id", adminHandler.UpdateService)
 
 			// Deletar serviço
-			services.DELETE("/:id", adminHandler.DeleteService)
+			servicesGroup.DELETE("/:id", adminHandler.DeleteService)
 
 			// Publicar serviço
-			services.PATCH("/:id/publish", adminHandler.PublishService)
+			servicesGroup.PATCH("/:id/publish", adminHandler.PublishService)
 
 			// Despublicar serviço
-			services.PATCH("/:id/unpublish", adminHandler.UnpublishService)
+			servicesGroup.PATCH("/:id/unpublish", adminHandler.UnpublishService)
 
-			// Rotas de versionamento
-			services.GET("/:id/versions", versionHandler.ListServiceVersions)
-			services.GET("/:id/versions/:version", versionHandler.GetServiceVersion)
-			services.GET("/:id/versions/compare", versionHandler.CompareServiceVersions)
-			services.POST("/:id/rollback", versionHandler.RollbackService)
+			// Rotas de versionamento (GET não é bloqueado)
+			servicesGroup.GET("/:id/versions", versionHandler.ListServiceVersions)
+			servicesGroup.GET("/:id/versions/:version", versionHandler.GetServiceVersion)
+			servicesGroup.GET("/:id/versions/compare", versionHandler.CompareServiceVersions)
+			servicesGroup.POST("/:id/rollback", versionHandler.RollbackService)
 		}
 
+		// Rotas de tombamentos com bloqueio de CUD durante migrações
 		tombamentos := admin.Group("/tombamentos")
+		tombamentos.Use(migrationLockMiddleware.BlockCUD()) // Bloqueia CUD durante migrações
 		{
 			// Criar tombamento
 			tombamentos.POST("", tombamentoHandler.CreateTombamento)
@@ -124,6 +143,25 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 			// Deletar tombamento
 			tombamentos.DELETE("/:id", tombamentoHandler.DeleteTombamento)
+		}
+
+		// Rotas de migração de schema (não bloqueadas)
+		migration := admin.Group("/migration")
+		{
+			// Iniciar migração
+			migration.POST("/start", migrationHandler.StartMigration)
+
+			// Verificar status
+			migration.GET("/status", migrationHandler.GetStatus)
+
+			// Executar rollback
+			migration.POST("/rollback", migrationHandler.Rollback)
+
+			// Histórico de migrações
+			migration.GET("/history", migrationHandler.GetHistory)
+
+			// Listar schemas disponíveis
+			migration.GET("/schemas", migrationHandler.ListSchemas)
 		}
 	}
 

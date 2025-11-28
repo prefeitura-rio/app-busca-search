@@ -10,6 +10,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -1165,6 +1166,30 @@ func normalizeTextMatch(score float64) float64 {
 	return math.Min(1.0, normalized)
 }
 
+// calculateRecencyFactor calcula o fator de recência baseado em last_update
+// Docs atualizados nos últimos 30 dias: fator = 1.0
+// Docs mais antigos: decaimento exponencial até 0.5 em ~1 ano
+func calculateRecencyFactor(lastUpdateTimestamp int64) float64 {
+	if lastUpdateTimestamp <= 0 {
+		return 0.5 // Docs sem data recebem fator mínimo
+	}
+
+	now := time.Now().Unix()
+	daysSinceUpdate := float64(now-lastUpdateTimestamp) / 86400.0 // segundos para dias
+
+	const gracePeriodDays = 30.0 // período sem penalidade
+	const lambda = 0.00207       // decay rate: ~0.5 em 365 dias após período de graça
+
+	if daysSinceUpdate <= gracePeriodDays {
+		return 1.0
+	}
+
+	daysAfterGrace := daysSinceUpdate - gracePeriodDays
+	factor := math.Exp(-lambda * daysAfterGrace)
+
+	return math.Max(0.5, factor) // mínimo de 0.5
+}
+
 // buildFilterBy constrói a expressão de filtro baseada no SearchRequest
 func buildFilterBy(req *models.SearchRequest) string {
 	var filters []string
@@ -1229,7 +1254,7 @@ func (ss *SearchService) applyScoreThreshold(
 	}
 
 	// Para semantic e hybrid: calcular min/max de vector_distance para normalização
-	var minVectorDist, maxVectorDist float64
+	var minVectorDist, maxVectorDist, maxSimilarity float64
 	if searchType == models.SearchTypeSemantic || searchType == models.SearchTypeHybrid {
 		minVectorDist = math.MaxFloat64
 		maxVectorDist = -math.MaxFloat64
@@ -1249,6 +1274,9 @@ func (ss *SearchService) applyScoreThreshold(
 				maxVectorDist = vd
 			}
 		}
+
+		// Similarity absoluta do melhor resultado (menor distance)
+		maxSimilarity = 1.0 - (minVectorDist / 2.0)
 	}
 
 	// Processar cada documento, calcular scores e aplicar threshold
@@ -1287,8 +1315,7 @@ func (ss *SearchService) applyScoreThreshold(
 			}
 
 		case models.SearchTypeSemantic:
-			// Para semantic: normalização min-max baseada nos resultados desta query
-			// Menor distance = maior similarity
+			// Para semantic: normalização onde pior = 0, melhor = similarity absoluta
 			var vd float64
 			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
 				vd = float64(vdFloat32)
@@ -1296,16 +1323,16 @@ func (ss *SearchService) applyScoreThreshold(
 				vd = vdFloat64
 			}
 
-			// Normalização min-max: melhor resultado (min distance) = 1.0, pior (max distance) = 0.0
+			// Normalização: pior resultado = 0, melhor resultado = maxSimilarity (valor absoluto)
 			var similarity float64
 			if maxVectorDist > minVectorDist {
-				// Inverter: menor distance = score maior
-				similarity = 1.0 - ((vd - minVectorDist) / (maxVectorDist - minVectorDist))
+				proportion := 1.0 - ((vd - minVectorDist) / (maxVectorDist - minVectorDist))
+				similarity = proportion * maxSimilarity
 			} else {
 				// Todos os resultados têm a mesma distance (edge case)
-				similarity = 1.0
+				similarity = maxSimilarity
 			}
-			similarity = math.Max(0.0, math.Min(1.0, similarity))
+			similarity = math.Max(0.0, math.Min(maxSimilarity, similarity))
 			scoreInfo.VectorSimilarity = &similarity
 			normalizedScore = similarity
 
@@ -1328,7 +1355,7 @@ func (ss *SearchService) applyScoreThreshold(
 			textScore = normalizeTextMatch(tm)
 			scoreInfo.TextMatchNormalized = &textScore
 
-			// Extrair e normalizar vector_distance com min-max
+			// Extrair e normalizar vector_distance: pior = 0, melhor = maxSimilarity
 			var vd float64
 			if vdFloat32, ok := doc.Metadata["vector_distance"].(float32); ok {
 				vd = float64(vdFloat32)
@@ -1336,15 +1363,15 @@ func (ss *SearchService) applyScoreThreshold(
 				vd = vdFloat64
 			}
 
-			// Normalização min-max: melhor resultado (min distance) = 1.0, pior (max distance) = 0.0
+			// Normalização: pior resultado = 0, melhor resultado = maxSimilarity (valor absoluto)
 			if maxVectorDist > minVectorDist {
-				// Inverter: menor distance = score maior
-				vectorScore = 1.0 - ((vd - minVectorDist) / (maxVectorDist - minVectorDist))
+				proportion := 1.0 - ((vd - minVectorDist) / (maxVectorDist - minVectorDist))
+				vectorScore = proportion * maxSimilarity
 			} else {
 				// Todos os resultados têm a mesma distance (edge case)
-				vectorScore = 1.0
+				vectorScore = maxSimilarity
 			}
-			vectorScore = math.Max(0.0, math.Min(1.0, vectorScore))
+			vectorScore = math.Max(0.0, math.Min(maxSimilarity, vectorScore))
 			scoreInfo.VectorSimilarity = &vectorScore
 
 			// Calcular score híbrido: alpha*text + (1-alpha)*vector (fórmula corrigida)
@@ -1358,6 +1385,15 @@ func (ss *SearchService) applyScoreThreshold(
 		}
 
 		scoreInfo.PassedThreshold = passes
+
+		// Aplicar recency boost se habilitado
+		finalScore := normalizedScore
+		if req.RecencyBoost {
+			recencyFactor := calculateRecencyFactor(doc.UpdatedAt)
+			scoreInfo.RecencyFactor = &recencyFactor
+			finalScore = normalizedScore * recencyFactor
+			scoreInfo.FinalScore = &finalScore
+		}
 
 		// Adicionar ScoreInfo ao metadata do documento
 		if doc.Metadata == nil {
@@ -1375,6 +1411,15 @@ func (ss *SearchService) applyScoreThreshold(
 		}
 	}
 
+	// Se recency boost está habilitado, reordenar por final_score
+	if req.RecencyBoost && len(filtered) > 1 {
+		sort.Slice(filtered, func(i, j int) bool {
+			scoreI := getFinalScoreFromMetadata(filtered[i])
+			scoreJ := getFinalScoreFromMetadata(filtered[j])
+			return scoreI > scoreJ
+		})
+	}
+
 	// Metadata sobre a filtragem (só incluir se threshold foi aplicado)
 	var filterMeta map[string]interface{}
 	if threshold != nil {
@@ -1387,5 +1432,23 @@ func (ss *SearchService) applyScoreThreshold(
 		}
 	}
 
+	if req.RecencyBoost {
+		if filterMeta == nil {
+			filterMeta = make(map[string]interface{})
+		}
+		filterMeta["recency_boost_applied"] = true
+	}
+
 	return filtered, filterMeta
+}
+
+// getFinalScoreFromMetadata extrai o final_score do metadata do documento
+func getFinalScoreFromMetadata(doc *models.ServiceDocument) float64 {
+	if doc.Metadata == nil {
+		return 0
+	}
+	if scoreInfo, ok := doc.Metadata["score_info"].(*models.ScoreInfo); ok && scoreInfo.FinalScore != nil {
+		return *scoreInfo.FinalScore
+	}
+	return 0
 }

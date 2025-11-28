@@ -42,6 +42,7 @@ func NewSearchHandler(searchService *services.SearchService, typesenseClient *ty
 // @Param threshold_ai query number false "Score mínimo para busca AI com generate_scores=true (0-1, filtra por ai_score.final_score)"
 // @Param exclude_agent_exclusive query bool false "Se true, exclui serviços exclusivos para agentes IA (mostra apenas serviços para humanos)" default(false)
 // @Param generate_scores query bool false "Gera scores detalhados via LLM para os resultados (apenas type=ai)." default(false)
+// @Param recency_boost query bool false "Aplica boost por recência: docs atualizados nos últimos 30 dias mantêm score, docs mais antigos sofrem decay gradual" default(false)
 // @Success 200 {object} models.SearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
