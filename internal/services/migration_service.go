@@ -179,7 +179,7 @@ func (ms *MigrationService) StartMigration(ctx context.Context, req *models.Migr
 	}
 
 	return &models.MigrationStatusResponse{
-		Status:       models.MigrationStatusCompleted,
+		Status:        models.MigrationStatusCompleted,
 		SchemaVersion: req.SchemaVersion,
 	}, nil
 }
@@ -375,7 +375,7 @@ func (ms *MigrationService) swapCollections(ctx context.Context, migration *mode
 	aliasSchema := &api.CollectionAliasSchema{
 		CollectionName: migration.TargetCollection,
 	}
-	
+
 	_, err := ms.client.Aliases().Upsert(ctx, PrefRioServicesCollection, aliasSchema)
 	if err != nil {
 		return fmt.Errorf("erro ao atualizar alias para nova collection: %v", err)
@@ -823,4 +823,3 @@ func structToMapMigration(v interface{}) map[string]interface{} {
 	json.Unmarshal(data, &result)
 	return result
 }
-

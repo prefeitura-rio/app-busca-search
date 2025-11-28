@@ -17,13 +17,13 @@ import (
 )
 
 var (
-	schemaVersion  = flag.String("schema", "", "Versão do schema para migração (ex: v2)")
-	migrationID    = flag.String("id", "", "ID da migração para rollback específico")
-	dryRun         = flag.Bool("dry-run", false, "Executa simulação sem modificar dados")
-	page           = flag.Int("page", 1, "Página para listagem de histórico")
-	perPage        = flag.Int("per-page", 10, "Itens por página para listagem de histórico")
-	userName       = flag.String("user", "CLI", "Nome do usuário que está executando")
-	jsonOutput     = flag.Bool("json", false, "Saída em formato JSON")
+	schemaVersion = flag.String("schema", "", "Versão do schema para migração (ex: v2)")
+	migrationID   = flag.String("id", "", "ID da migração para rollback específico")
+	dryRun        = flag.Bool("dry-run", false, "Executa simulação sem modificar dados")
+	page          = flag.Int("page", 1, "Página para listagem de histórico")
+	perPage       = flag.Int("per-page", 10, "Itens por página para listagem de histórico")
+	userName      = flag.String("user", "CLI", "Nome do usuário que está executando")
+	jsonOutput    = flag.Bool("json", false, "Saída em formato JSON")
 )
 
 func main() {
@@ -231,7 +231,7 @@ func cmdHistory(ctx context.Context, ms *services.MigrationService) {
 
 func cmdSchemas(ctx context.Context, registry *schemas.Registry, ms *services.MigrationService) {
 	versions := registry.ListVersions()
-	
+
 	// Consulta a versão real em uso no Typesense
 	currentVersion := ms.GetCurrentSchemaVersion(ctx)
 
@@ -287,4 +287,3 @@ func printJSON(v interface{}) {
 	}
 	fmt.Println(string(data))
 }
-

@@ -46,4 +46,3 @@ func SchemaV1() *SchemaDefinition {
 		Transform: nil, // V1 é o baseline, não precisa de transformação
 	}
 }
-

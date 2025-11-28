@@ -45,4 +45,3 @@ func SchemaV2() *SchemaDefinition {
 		Transform: nil,
 	}
 }
-

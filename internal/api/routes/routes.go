@@ -67,6 +67,14 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	migrationHandler := handlers.NewMigrationHandler(migrationService, schemaRegistry)
 	migrationLockMiddleware := middlewares.NewMigrationLockMiddleware(migrationService)
 
+	// Initialize health handler
+	healthHandler := handlers.NewHealthHandler(typesenseClient)
+
+	// Health check endpoints (no /api/v1 prefix for K8s probes and uptime monitoring)
+	r.GET("/liveness", healthHandler.Liveness)   // K8s liveness probe
+	r.GET("/readiness", healthHandler.Readiness) // K8s readiness probe
+	r.GET("/health", healthHandler.Health)       // Uptime monitoring (comprehensive)
+
 	api := r.Group("/api/v1")
 	{
 		// Unified search endpoints

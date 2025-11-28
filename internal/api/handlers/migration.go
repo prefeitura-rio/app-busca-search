@@ -167,7 +167,7 @@ func (h *MigrationHandler) GetHistory(c *gin.Context) {
 // @Router /api/v1/admin/migration/schemas [get]
 func (h *MigrationHandler) ListSchemas(c *gin.Context) {
 	versions := h.schemaRegistry.ListVersions()
-	
+
 	// Consulta a versão real em uso no Typesense
 	currentVersion := h.migrationService.GetCurrentSchemaVersion(c.Request.Context())
 
@@ -203,4 +203,3 @@ func containsAt(s, substr string, start int) bool {
 	}
 	return false
 }
-

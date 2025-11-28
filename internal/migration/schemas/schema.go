@@ -29,9 +29,9 @@ func NewRegistry() *Registry {
 	r := &Registry{
 		schemas: make(map[string]*SchemaDefinition),
 	}
-	
+
 	r.registerBuiltinSchemas()
-	
+
 	return r
 }
 
@@ -45,9 +45,9 @@ func (r *Registry) registerBuiltinSchemas() {
 func (r *Registry) Register(schema *SchemaDefinition) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	r.schemas[schema.Version] = schema
-	
+
 	if r.currentVersion == "" || schema.Version > r.currentVersion {
 		r.currentVersion = schema.Version
 	}
@@ -57,12 +57,12 @@ func (r *Registry) Register(schema *SchemaDefinition) {
 func (r *Registry) GetSchema(version string) (*SchemaDefinition, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	schema, exists := r.schemas[version]
 	if !exists {
 		return nil, fmt.Errorf("schema versão '%s' não encontrado", version)
 	}
-	
+
 	return schema, nil
 }
 
@@ -77,11 +77,11 @@ func (r *Registry) GetCurrentVersion() string {
 func (r *Registry) SetCurrentVersion(version string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if _, exists := r.schemas[version]; !exists {
 		return fmt.Errorf("schema versão '%s' não encontrado", version)
 	}
-	
+
 	r.currentVersion = version
 	return nil
 }
@@ -90,12 +90,12 @@ func (r *Registry) SetCurrentVersion(version string) error {
 func (r *Registry) ListVersions() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	versions := make([]string, 0, len(r.schemas))
 	for version := range r.schemas {
 		versions = append(versions, version)
 	}
-	
+
 	return versions
 }
 
@@ -115,4 +115,3 @@ func IntPtr(i int) *int {
 func BoolPtr(b bool) *bool {
 	return &b
 }
-

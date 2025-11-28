@@ -13,21 +13,21 @@ const (
 
 // MigrationControl representa o estado de controle de uma migração
 type MigrationControl struct {
-	ID                   string          `json:"id,omitempty" typesense:"id,optional"`
-	Status               MigrationStatus `json:"status" typesense:"status"`
-	SourceCollection     string          `json:"source_collection" typesense:"source_collection"`
-	TargetCollection     string          `json:"target_collection" typesense:"target_collection"`
-	BackupCollection     string          `json:"backup_collection" typesense:"backup_collection"`
-	SchemaVersion        string          `json:"schema_version" typesense:"schema_version"`
-	PreviousSchemaVersion string         `json:"previous_schema_version,omitempty" typesense:"previous_schema_version,optional"`
-	StartedAt            int64           `json:"started_at" typesense:"started_at"`
-	CompletedAt          int64           `json:"completed_at,omitempty" typesense:"completed_at,optional"`
-	StartedBy            string          `json:"started_by" typesense:"started_by"`
-	StartedByCPF         string          `json:"started_by_cpf,omitempty" typesense:"started_by_cpf,optional"`
-	TotalDocuments       int             `json:"total_documents" typesense:"total_documents"`
-	MigratedDocuments    int             `json:"migrated_documents" typesense:"migrated_documents"`
-	ErrorMessage         string          `json:"error_message,omitempty" typesense:"error_message,optional"`
-	IsLocked             bool            `json:"is_locked" typesense:"is_locked"`
+	ID                    string          `json:"id,omitempty" typesense:"id,optional"`
+	Status                MigrationStatus `json:"status" typesense:"status"`
+	SourceCollection      string          `json:"source_collection" typesense:"source_collection"`
+	TargetCollection      string          `json:"target_collection" typesense:"target_collection"`
+	BackupCollection      string          `json:"backup_collection" typesense:"backup_collection"`
+	SchemaVersion         string          `json:"schema_version" typesense:"schema_version"`
+	PreviousSchemaVersion string          `json:"previous_schema_version,omitempty" typesense:"previous_schema_version,optional"`
+	StartedAt             int64           `json:"started_at" typesense:"started_at"`
+	CompletedAt           int64           `json:"completed_at,omitempty" typesense:"completed_at,optional"`
+	StartedBy             string          `json:"started_by" typesense:"started_by"`
+	StartedByCPF          string          `json:"started_by_cpf,omitempty" typesense:"started_by_cpf,optional"`
+	TotalDocuments        int             `json:"total_documents" typesense:"total_documents"`
+	MigratedDocuments     int             `json:"migrated_documents" typesense:"migrated_documents"`
+	ErrorMessage          string          `json:"error_message,omitempty" typesense:"error_message,optional"`
+	IsLocked              bool            `json:"is_locked" typesense:"is_locked"`
 }
 
 // MigrationStartRequest representa uma solicitação de início de migração
@@ -80,4 +80,3 @@ type MigrationRollbackRequest struct {
 	MigrationID string `json:"migration_id,omitempty"`
 	Reason      string `json:"reason,omitempty"`
 }
-
