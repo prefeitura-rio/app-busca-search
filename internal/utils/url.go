@@ -10,6 +10,7 @@ import (
 var TargetDomains = []string{
 	"services-carioca.rio.rj.gov.br",
 	"acesso.processo.rio",
+	"jeap.rio.rj.gov.br",
 }
 
 // WrapURLIfNeeded verifica se a URL aponta para um dos domínios-alvo
