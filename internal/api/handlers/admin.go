@@ -70,6 +70,7 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		ServicoNaoCobre:       request.ServicoNaoCobre,
 		LegislacaoRelacionada: request.LegislacaoRelacionada,
 		TemaGeral:             request.TemaGeral,
+		SubCategoria:          request.SubCategoria,
 		PublicoEspecifico:     request.PublicoEspecifico,
 		FixarDestaque:         request.FixarDestaque,
 		AwaitingApproval:      request.AwaitingApproval,
@@ -158,6 +159,7 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		ServicoNaoCobre:       request.ServicoNaoCobre,
 		LegislacaoRelacionada: request.LegislacaoRelacionada,
 		TemaGeral:             request.TemaGeral,
+		SubCategoria:          request.SubCategoria,
 		PublicoEspecifico:     request.PublicoEspecifico,
 		FixarDestaque:         request.FixarDestaque,
 		AwaitingApproval:      request.AwaitingApproval,
@@ -268,6 +270,7 @@ func (h *AdminHandler) GetService(c *gin.Context) {
 // @Param status query int false "Status do serviço (0=Draft, 1=Published)"
 // @Param author query string false "Filtrar por autor"
 // @Param tema_geral query string false "Filtrar por tema geral"
+// @Param sub_categoria query string false "Filtrar por subcategoria"
 // @Param awaiting_approval query bool false "Filtrar por aguardando aprovação"
 // @Param is_free query bool false "Filtrar por serviços gratuitos"
 // @Param published_at query int false "Filtrar por data de publicação (timestamp)"
@@ -305,6 +308,10 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 
 	if tema := c.Query("tema_geral"); tema != "" {
 		filters["tema_geral"] = tema
+	}
+
+	if subCategoria := c.Query("sub_categoria"); subCategoria != "" {
+		filters["sub_categoria"] = subCategoria
 	}
 
 	if awaitingApproval := c.Query("awaiting_approval"); awaitingApproval != "" {

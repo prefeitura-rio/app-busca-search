@@ -79,6 +79,7 @@ type ServiceDocument struct {
 	Title       string                 `json:"title"`
 	Description string                 `json:"description"`
 	Category    string                 `json:"category"`
+	Subcategory *string                `json:"subcategory,omitempty"`
 	Status      int32                  `json:"status"`
 	CreatedAt   int64                  `json:"created_at"`
 	UpdatedAt   int64                  `json:"updated_at"`
