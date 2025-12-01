@@ -23,10 +23,6 @@ import (
 	"google.golang.org/genai"
 )
 
-const (
-	CollectionName = "prefrio_services_base"
-)
-
 var (
 	ErrSearchCanceled = errors.New("busca cancelada")
 )
@@ -1077,6 +1073,7 @@ func (ss *SearchService) transformDocument(tsDoc map[string]interface{}) *models
 	title := getString(tsDoc, "nome_servico")
 	description := getString(tsDoc, "resumo")
 	category := getString(tsDoc, "tema_geral")
+	subcategory := getStringPtr(tsDoc, "sub_categoria")
 	status := getInt32(tsDoc, "status")
 	createdAt := getInt64(tsDoc, "created_at")
 	updatedAt := getInt64(tsDoc, "last_update")
@@ -1085,7 +1082,7 @@ func (ss *SearchService) transformDocument(tsDoc map[string]interface{}) *models
 	metadata := make(map[string]interface{})
 	excludeFields := map[string]bool{
 		"id": true, "nome_servico": true, "resumo": true,
-		"tema_geral": true, "status": true, "created_at": true,
+		"tema_geral": true, "sub_categoria": true, "status": true, "created_at": true,
 		"last_update": true, "embedding": true, // não retornar embedding
 		"search_content": true, // não retornar search_content bagunçado
 	}
@@ -1101,53 +1098,12 @@ func (ss *SearchService) transformDocument(tsDoc map[string]interface{}) *models
 		Title:       title,
 		Description: description,
 		Category:    category,
+		Subcategory: subcategory,
 		Status:      status,
 		CreatedAt:   createdAt,
 		UpdatedAt:   updatedAt,
 		Metadata:    metadata,
 	}
-}
-
-// Helpers para extrair valores
-func getString(m map[string]interface{}, key string) string {
-	if v, ok := m[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-func getInt32(m map[string]interface{}, key string) int32 {
-	if v, ok := m[key]; ok {
-		switch val := v.(type) {
-		case int:
-			return int32(val)
-		case int32:
-			return val
-		case int64:
-			return int32(val)
-		case float64:
-			return int32(val)
-		}
-	}
-	return 0
-}
-
-func getInt64(m map[string]interface{}, key string) int64 {
-	if v, ok := m[key]; ok {
-		switch val := v.(type) {
-		case int:
-			return int64(val)
-		case int32:
-			return int64(val)
-		case int64:
-			return val
-		case float64:
-			return int64(val)
-		}
-	}
-	return 0
 }
 
 // Pointer helpers

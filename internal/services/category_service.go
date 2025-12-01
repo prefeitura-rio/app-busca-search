@@ -274,6 +274,7 @@ func (cs *CategoryService) transformDocument(tsDoc map[string]interface{}) *mode
 	title := getString(tsDoc, "nome_servico")
 	description := getString(tsDoc, "resumo")
 	category := getString(tsDoc, "tema_geral")
+	subcategory := getStringPtr(tsDoc, "sub_categoria")
 	status := getInt32(tsDoc, "status")
 	createdAt := getInt64(tsDoc, "created_at")
 	updatedAt := getInt64(tsDoc, "last_update")
@@ -282,7 +283,7 @@ func (cs *CategoryService) transformDocument(tsDoc map[string]interface{}) *mode
 	metadata := make(map[string]interface{})
 	excludeFields := map[string]bool{
 		"id": true, "nome_servico": true, "resumo": true,
-		"tema_geral": true, "status": true, "created_at": true,
+		"tema_geral": true, "sub_categoria": true, "status": true, "created_at": true,
 		"last_update": true, "embedding": true, // não retornar embedding
 		"search_content": true, // não retornar search_content
 	}
@@ -298,6 +299,7 @@ func (cs *CategoryService) transformDocument(tsDoc map[string]interface{}) *mode
 		Title:       title,
 		Description: description,
 		Category:    category,
+		Subcategory: subcategory,
 		Status:      status,
 		CreatedAt:   createdAt,
 		UpdatedAt:   updatedAt,

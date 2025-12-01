@@ -61,6 +61,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	categoryService := services.NewCategoryService(typesenseClient.GetClient(), popularityService)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
 
+	// Initialize subcategory services
+	subcategoryService := services.NewSubcategoryService(typesenseClient.GetClient(), popularityService)
+	subcategoryHandler := handlers.NewSubcategoryHandler(subcategoryService)
+
 	// Initialize migration services
 	schemaRegistry := schemas.NewRegistry()
 	migrationService := services.NewMigrationService(typesenseClient.GetClient(), schemaRegistry)
@@ -83,6 +87,10 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 
 		// Category endpoints
 		api.GET("/categories", categoryHandler.GetCategories)
+
+		// Subcategory endpoints
+		api.GET("/categories/:category/subcategories", subcategoryHandler.GetSubcategories)
+		api.GET("/subcategories/:subcategory/services", subcategoryHandler.GetServicesBySubcategory)
 	}
 
 	// Rotas administrativas com autenticação JWT

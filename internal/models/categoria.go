@@ -56,3 +56,60 @@ type CategoryResponse struct {
 	FilteredCategory *FilteredCategoryResult `json:"filtered_category,omitempty"`
 	Metadata         map[string]interface{}  `json:"metadata"`
 }
+
+// ========================================
+// SUBCATEGORIES SYSTEM
+// ========================================
+
+// Subcategory representa uma subcategoria com contador e score de popularidade
+type Subcategory struct {
+	Name            string `json:"name"`
+	Category        string `json:"category"`
+	Count           int    `json:"count"`
+	PopularityScore int    `json:"popularity_score"`
+}
+
+// SubcategoryRequest representa requisição de subcategorias
+type SubcategoryRequest struct {
+	Category        string `form:"category" binding:"required"` // categoria pai (obrigatória)
+	SortBy          string `form:"sort_by"`                     // popularity, count, alpha
+	Order           string `form:"order"`                       // asc, desc
+	IncludeEmpty    bool   `form:"include_empty"`               // incluir subcategorias sem serviços
+	IncludeInactive bool   `form:"include_inactive"`            // incluir serviços inativos (status != 1)
+}
+
+// SubcategoryResponse resposta do endpoint de subcategorias
+type SubcategoryResponse struct {
+	Subcategories      []*Subcategory         `json:"subcategories"`
+	TotalSubcategories int                    `json:"total_subcategories"`
+	Category           string                 `json:"category"`
+	Metadata           map[string]interface{} `json:"metadata"`
+}
+
+// FilteredSubcategoryResult resultado de serviços filtrados por subcategoria
+type FilteredSubcategoryResult struct {
+	Name          string             `json:"name"`
+	Category      string             `json:"category"`
+	Services      []*ServiceDocument `json:"services"`
+	TotalServices int                `json:"total_services"`
+	Page          int                `json:"page"`
+	PerPage       int                `json:"per_page"`
+}
+
+// SubcategoryServicesRequest representa requisição de serviços por subcategoria
+type SubcategoryServicesRequest struct {
+	Subcategory     string `form:"subcategory" binding:"required"` // subcategoria (obrigatória)
+	Page            int    `form:"page"`                           // página
+	PerPage         int    `form:"per_page"`                       // resultados por página
+	IncludeInactive bool   `form:"include_inactive"`               // incluir serviços inativos
+}
+
+// SubcategoryServicesResponse resposta de serviços por subcategoria
+type SubcategoryServicesResponse struct {
+	Subcategory   string                 `json:"subcategory"`
+	Services      []*ServiceDocument     `json:"services"`
+	TotalServices int                    `json:"total_services"`
+	Page          int                    `json:"page"`
+	PerPage       int                    `json:"per_page"`
+	Metadata      map[string]interface{} `json:"metadata"`
+}
