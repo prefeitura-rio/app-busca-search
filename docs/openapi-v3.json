@@ -2499,6 +2499,224 @@
         ]
       }
     },
+    "/api/v2/search": {
+      "get": {
+        "description": "Executa busca em múltiplas coleções configuradas (services, courses, jobs). Suporta keyword, semantic e hybrid search. Retorna documentos com estrutura unificada incluindo campo 'collection' e 'type'.",
+        "tags": [
+          "search-v2"
+        ],
+        "summary": "Busca unificada multi-coleção (v2)",
+        "parameters": [
+          {
+            "description": "Texto da busca",
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tipo de busca: keyword, semantic, hybrid",
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da página (mínimo: 1)",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "description": "Resultados por página (máximo: 100)",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "description": "Incluir documentos inativos (aplica-se apenas a coleções com filtro de status)",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Alpha para busca hybrid (0-1). Alpha=0.3 significa 30% texto + 70% vetor.",
+            "name": "alpha",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "default": 0.3
+            }
+          },
+          {
+            "description": "Score mínimo para busca keyword (0-1, filtra text_match normalizado)",
+            "name": "threshold_keyword",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)",
+            "name": "threshold_semantic",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo para busca hybrid (0-1, filtra score híbrido)",
+            "name": "threshold_hybrid",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.UnifiedSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v2/search/{id}": {
+      "get": {
+        "description": "Retorna documento de qualquer coleção configurada. Se 'collection' fornecido como query param, tenta buscar nessa coleção primeiro. Caso contrário, busca em todas as coleções configuradas.",
+        "tags": [
+          "search-v2"
+        ],
+        "summary": "Busca documento por ID em qualquer coleção configurada (v2)",
+        "parameters": [
+          {
+            "example": "cffe0736-80a6-46fe-ace6-3cebb4d262ea",
+            "description": "ID do documento (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "example": "go-cursos",
+            "description": "Collection hint para busca otimizada",
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.UnifiedDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "description": "Verifica a saúde completa da aplicação (para monitoramento externo de uptime)",
@@ -3178,6 +3396,43 @@
           }
         }
       },
+      "models.ScoreInfo": {
+        "type": "object",
+        "properties": {
+          "final_score": {
+            "description": "Score final após aplicar recency boost",
+            "type": "number"
+          },
+          "hybrid_score": {
+            "description": "Score híbrido combinado 0-1",
+            "type": "number"
+          },
+          "passed_threshold": {
+            "description": "Se passou no threshold",
+            "type": "boolean"
+          },
+          "recency_factor": {
+            "description": "Fator de recência aplicado (1.0 = recente, decai com o tempo)",
+            "type": "number"
+          },
+          "text_match_normalized": {
+            "description": "Score normalizado 0-1 do text_match",
+            "type": "number"
+          },
+          "threshold_applied": {
+            "description": "Tipo de threshold aplicado: \"keyword\", \"semantic\", \"hybrid\", \"none\"",
+            "type": "string"
+          },
+          "threshold_value": {
+            "description": "Valor do threshold aplicado",
+            "type": "number"
+          },
+          "vector_similarity": {
+            "description": "Similaridade vetorial 0-1 (1 = idêntico)",
+            "type": "number"
+          }
+        }
+      },
       "models.SearchResponse": {
         "type": "object",
         "properties": {
@@ -3573,6 +3828,70 @@
             "items": {
               "$ref": "#/components/schemas/models.Tombamento"
             }
+          }
+        }
+      },
+      "models.UnifiedDocument": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "description": "Which collection this document belongs to",
+            "type": "string"
+          },
+          "data": {
+            "description": "Raw document data from Typesense",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "score_info": {
+            "$ref": "#/components/schemas/models.ScoreInfo"
+          },
+          "type": {
+            "description": "Document type from collection config (service, course, job, etc.)",
+            "type": "string"
+          }
+        }
+      },
+      "models.UnifiedSearchResponse": {
+        "type": "object",
+        "properties": {
+          "collections": {
+            "description": "Which collections were searched",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filtered_count": {
+            "description": "Após aplicar thresholds",
+            "type": "integer"
+          },
+          "metadata": {
+            "description": "Para AI search",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.UnifiedDocument"
+            }
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/models.SearchType"
+          },
+          "total_count": {
+            "description": "Total original do Typesense (across all collections)",
+            "type": "integer"
           }
         }
       },
