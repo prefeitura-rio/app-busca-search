@@ -382,6 +382,14 @@
             }
           },
           {
+            "description": "Filtrar por subcategoria",
+            "name": "sub_categoria",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Filtrar por aguardando aprovação",
             "name": "awaiting_approval",
             "in": "query",
@@ -2059,6 +2067,114 @@
         ]
       }
     },
+    "/api/v1/categories/{category}/subcategories": {
+      "get": {
+        "description": "Retorna lista de subcategorias dentro de uma categoria pai, ordenadas por popularidade, quantidade de serviços ou ordem alfabética. Subcategorias são extraídas dinamicamente dos serviços via facet search no Typesense.\n\n**Casos de Uso:**\n1. Listar subcategorias: GET /api/v1/categories/Educação/subcategories\n2. Ordenar por quantidade: GET /api/v1/categories/Educação/subcategories?sort_by=count&order=desc\n3. Incluir vazias: GET /api/v1/categories/Educação/subcategories?include_empty=true",
+        "tags": [
+          "subcategories"
+        ],
+        "summary": "Lista subcategorias de uma categoria específica",
+        "parameters": [
+          {
+            "description": "Nome da categoria pai (ex: Educação, Saúde, Transporte)",
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Critério de ordenação",
+            "name": "sort_by",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "popularity",
+                "count",
+                "alpha"
+              ],
+              "default": "popularity"
+            }
+          },
+          {
+            "description": "Direção da ordenação",
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "description": "Incluir subcategorias sem serviços publicados",
+            "name": "include_empty",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Incluir serviços inativos/rascunhos (status != 1) nas contagens",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de subcategorias com metadados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SubcategoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetros inválidos (sort_by ou order)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno ao buscar subcategorias",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "description": "Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente). Resposta inclui total_count (total do Typesense) e filtered_count (após aplicar thresholds).",
@@ -2271,6 +2387,99 @@
           },
           "500": {
             "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subcategories/{subcategory}/services": {
+      "get": {
+        "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true",
+        "tags": [
+          "subcategories"
+        ],
+        "summary": "Lista serviços de uma subcategoria específica",
+        "parameters": [
+          {
+            "description": "Nome da subcategoria (ex: Ensino Fundamental, Vacinação)",
+            "name": "subcategory",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da página (mínimo: 1)",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "description": "Quantidade de serviços por página (máximo: 100)",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "description": "Incluir serviços inativos/rascunhos (status != 1)",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de serviços da subcategoria com metadados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SubcategoryServicesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetros inválidos (page ou per_page)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno ao buscar serviços",
             "content": {
               "application/json": {
                 "schema": {
@@ -2800,6 +3009,9 @@
             "maximum": 1,
             "minimum": 0
           },
+          "sub_categoria": {
+            "type": "string"
+          },
           "tema_geral": {
             "type": "string",
             "maxLength": 20000
@@ -2916,6 +3128,10 @@
             "maximum": 1,
             "minimum": 0
           },
+          "sub_categoria": {
+            "type": "string",
+            "maxLength": 20000
+          },
           "tema_geral": {
             "type": "string",
             "maxLength": 20000
@@ -3031,6 +3247,9 @@
           },
           "status": {
             "type": "integer"
+          },
+          "subcategory": {
+            "type": "string"
           },
           "title": {
             "type": "string"
@@ -3199,6 +3418,71 @@
             "maxLength": 20000
           },
           "version_number": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.Subcategory": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "popularity_score": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.SubcategoryResponse": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "subcategories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.Subcategory"
+            }
+          },
+          "total_subcategories": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.SubcategoryServicesResponse": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ServiceDocument"
+            }
+          },
+          "subcategory": {
+            "type": "string"
+          },
+          "total_services": {
             "type": "integer"
           }
         }
