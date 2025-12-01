@@ -114,3 +114,29 @@ type QueryAnalysis struct {
 	Confidence     float64  `json:"confidence"`      // 0-1
 	PortalTags     []string `json:"portal_tags"`     // portal inferido
 }
+
+// ============================================================================
+// v2 API Models - Multi-Collection Search
+// ============================================================================
+
+// UnifiedDocument represents a document from any collection (v2 API)
+// Uses pure data passthrough - no field normalization
+type UnifiedDocument struct {
+	ID         string                 `json:"id"`
+	Collection string                 `json:"collection"` // Which collection this document belongs to
+	Type       string                 `json:"type"`       // Document type from collection config (service, course, job, etc.)
+	Data       map[string]interface{} `json:"data"`       // Raw document data from Typesense
+	ScoreInfo  *ScoreInfo             `json:"score_info,omitempty"`
+}
+
+// UnifiedSearchResponse represents multi-collection search response (v2 API)
+type UnifiedSearchResponse struct {
+	Results       []*UnifiedDocument     `json:"results"`
+	TotalCount    int                    `json:"total_count"`    // Total original do Typesense (across all collections)
+	FilteredCount int                    `json:"filtered_count"` // Após aplicar thresholds
+	Page          int                    `json:"page"`
+	PerPage       int                    `json:"per_page"`
+	SearchType    SearchType             `json:"search_type"`
+	Collections   []string               `json:"collections"`        // Which collections were searched
+	Metadata      map[string]interface{} `json:"metadata,omitempty"` // Para AI search
+}
