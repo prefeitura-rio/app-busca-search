@@ -11,6 +11,7 @@ import (
 	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
+	"github.com/prefeitura-rio/app-busca-search/internal/utils"
 )
 
 type AdminHandler struct {
@@ -51,6 +52,7 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 	}
 
 	serviceID := uuid.New().String()
+	slug := utils.GenerateSlug(request.NomeServico, serviceID)
 
 	// Converte para modelo completo
 	service := &models.PrefRioService{
@@ -80,6 +82,8 @@ func (h *AdminHandler) CreateService(c *gin.Context) {
 		ExtraFields:           request.ExtraFields,
 		Status:                request.Status,
 		Buttons:               request.Buttons,
+		Slug:                  slug,
+		SlugHistory:           []string{},
 	}
 
 	// Cria o serviço com rastreamento de versão
@@ -141,6 +145,16 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		return
 	}
 
+	// Gerencia slug: se nome mudou, atualiza slug e adiciona antigo ao histórico
+	slug := existingService.Slug
+	slugHistory := existingService.SlugHistory
+	if request.NomeServico != existingService.NomeServico {
+		if slug != "" {
+			slugHistory = append(slugHistory, slug)
+		}
+		slug = utils.GenerateSlug(request.NomeServico, serviceID)
+	}
+
 	// Converte para modelo completo preservando dados existentes
 	service := &models.PrefRioService{
 		ID:                    serviceID,
@@ -170,6 +184,8 @@ func (h *AdminHandler) UpdateService(c *gin.Context) {
 		Status:                request.Status,
 		Buttons:               request.Buttons,
 		CreatedAt:             existingService.CreatedAt, // Preserva data de criação
+		Slug:                  slug,
+		SlugHistory:           slugHistory,
 	}
 
 	// Atualiza o serviço com rastreamento de versão

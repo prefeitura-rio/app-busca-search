@@ -39,6 +39,7 @@ func NewRegistry() *Registry {
 func (r *Registry) registerBuiltinSchemas() {
 	r.Register(SchemaV1())
 	r.Register(SchemaV2())
+	r.Register(SchemaV3())
 }
 
 // Register registra um novo schema
