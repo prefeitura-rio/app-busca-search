@@ -159,6 +159,8 @@ type PrefRioService struct {
 	SearchContent         string                 `json:"search_content" typesense:"search_content"`
 	Buttons               []Button               `json:"buttons" typesense:"buttons,optional"`
 	Embedding             []float64              `json:"embedding,omitempty" typesense:"embedding,optional"`
+	Slug                  string                 `json:"slug" typesense:"slug"`
+	SlugHistory           []string               `json:"slug_history,omitempty" typesense:"slug_history,optional"`
 }
 
 // MarshalJSON customiza a serialização JSON para adicionar campos plaintext

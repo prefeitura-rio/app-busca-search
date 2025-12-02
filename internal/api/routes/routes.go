@@ -98,6 +98,9 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 		api.GET("/search", searchHandler.Search)
 		api.GET("/search/:id", searchHandler.GetDocumentByID)
 
+		// SEO-friendly service endpoint (by slug)
+		api.GET("/services/:slug", searchHandler.GetServiceBySlug)
+
 		// Category endpoints
 		api.GET("/categories", categoryHandler.GetCategories)
 

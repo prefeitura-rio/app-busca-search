@@ -1450,6 +1450,128 @@ func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.Pref
 	return &service, nil
 }
 
+// GetPrefRioServiceBySlug busca um serviço pelo slug atual
+func (c *Client) GetPrefRioServiceBySlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
+	collectionName := "prefrio_services_base"
+
+	filterBy := fmt.Sprintf("slug:=%s", slug)
+	searchParams := &api.SearchCollectionParams{
+		Q:             stringPtr("*"),
+		FilterBy:      &filterBy,
+		Page:          intPtr(1),
+		PerPage:       intPtr(1),
+		IncludeFields: stringPtr("*"),
+		ExcludeFields: stringPtr("embedding"),
+	}
+
+	result, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar serviço: %v", err)
+	}
+
+	if result.Found == nil || *result.Found == 0 {
+		return nil, nil
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var resultMap map[string]interface{}
+	if err := json.Unmarshal(resultBytes, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	hits, ok := resultMap["hits"].([]interface{})
+	if !ok || len(hits) == 0 {
+		return nil, nil
+	}
+
+	hitMap, ok := hits[0].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	doc, ok := hitMap["document"].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	docBytes, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar documento: %v", err)
+	}
+
+	var service models.PrefRioService
+	if err := json.Unmarshal(docBytes, &service); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar documento: %v", err)
+	}
+
+	return &service, nil
+}
+
+// GetPrefRioServiceByHistoricalSlug busca um serviço que tenha o slug no histórico
+func (c *Client) GetPrefRioServiceByHistoricalSlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
+	collectionName := "prefrio_services_base"
+
+	filterBy := fmt.Sprintf("slug_history:=%s", slug)
+	searchParams := &api.SearchCollectionParams{
+		Q:             stringPtr("*"),
+		FilterBy:      &filterBy,
+		Page:          intPtr(1),
+		PerPage:       intPtr(1),
+		IncludeFields: stringPtr("*"),
+		ExcludeFields: stringPtr("embedding"),
+	}
+
+	result, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao buscar serviço: %v", err)
+	}
+
+	if result.Found == nil || *result.Found == 0 {
+		return nil, nil
+	}
+
+	resultBytes, err := json.Marshal(result)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
+	}
+
+	var resultMap map[string]interface{}
+	if err := json.Unmarshal(resultBytes, &resultMap); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
+	}
+
+	hits, ok := resultMap["hits"].([]interface{})
+	if !ok || len(hits) == 0 {
+		return nil, nil
+	}
+
+	hitMap, ok := hits[0].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	doc, ok := hitMap["document"].(map[string]interface{})
+	if !ok {
+		return nil, nil
+	}
+
+	docBytes, err := json.Marshal(doc)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao serializar documento: %v", err)
+	}
+
+	var service models.PrefRioService
+	if err := json.Unmarshal(docBytes, &service); err != nil {
+		return nil, fmt.Errorf("erro ao deserializar documento: %v", err)
+	}
+
+	return &service, nil
+}
+
 // ListPrefRioServices lista serviços com paginação e filtros
 func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, filters map[string]interface{}) (*models.PrefRioServiceResponse, error) {
 	collectionName := "prefrio_services_base"
