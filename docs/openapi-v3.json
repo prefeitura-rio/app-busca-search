@@ -2406,6 +2406,81 @@
         ]
       }
     },
+    "/api/v1/services/{slug}": {
+      "get": {
+        "description": "Retorna os detalhes completos de um serviço através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual.",
+        "tags": [
+          "services"
+        ],
+        "summary": "Busca um serviço por slug SEO-friendly",
+        "parameters": [
+          {
+            "example": "matricula-escolar-abc123de",
+            "description": "Slug do serviço",
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Redirect para slug atual (inclui serviço e headers Location)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/subcategories/{subcategory}/services": {
       "get": {
         "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true",
@@ -3221,6 +3296,15 @@
             "type": "string",
             "maxLength": 20000
           },
+          "slug": {
+            "type": "string"
+          },
+          "slug_history": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "status": {
             "description": "0=Draft, 1=Published",
             "type": "integer",
@@ -3499,6 +3583,9 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          },
+          "slug": {
+            "type": "string"
           },
           "status": {
             "type": "integer"
