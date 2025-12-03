@@ -99,6 +99,7 @@ type FilteredSubcategoryResult struct {
 // SubcategoryServicesRequest representa requisição de serviços por subcategoria
 type SubcategoryServicesRequest struct {
 	Subcategory     string `form:"subcategory" binding:"required"` // subcategoria (obrigatória)
+	Category        string `form:"category"`                       // categoria pai (opcional, para desambiguar subcategorias iguais)
 	Page            int    `form:"page"`                           // página
 	PerPage         int    `form:"per_page"`                       // resultados por página
 	IncludeInactive bool   `form:"include_inactive"`               // incluir serviços inativos

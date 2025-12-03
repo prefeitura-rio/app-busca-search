@@ -82,14 +82,22 @@ func (scs *SubcategoryService) GetServicesBySubcategory(ctx context.Context, req
 		req.PerPage = 10
 	}
 
-	// Construir filtro dinamicamente baseado em includeInactive
+	// Construir filtro dinamicamente baseado em category e includeInactive
 	var filterBy string
-	if req.IncludeInactive {
-		// Apenas filtrar por subcategoria, sem filtro de status
-		filterBy = fmt.Sprintf("sub_categoria:=`%s`", req.Subcategory)
+	if req.Category != "" {
+		// Filtrar por categoria E subcategoria (desambiguação)
+		if req.IncludeInactive {
+			filterBy = fmt.Sprintf("tema_geral:=`%s` && sub_categoria:=`%s`", req.Category, req.Subcategory)
+		} else {
+			filterBy = fmt.Sprintf("tema_geral:=`%s` && sub_categoria:=`%s` && status:=1", req.Category, req.Subcategory)
+		}
 	} else {
-		// Filtrar por subcategoria E status publicado
-		filterBy = fmt.Sprintf("sub_categoria:=`%s` && status:=1", req.Subcategory)
+		// Apenas filtrar por subcategoria
+		if req.IncludeInactive {
+			filterBy = fmt.Sprintf("sub_categoria:=`%s`", req.Subcategory)
+		} else {
+			filterBy = fmt.Sprintf("sub_categoria:=`%s` && status:=1", req.Subcategory)
+		}
 	}
 
 	searchParams := &api.SearchCollectionParams{
@@ -113,9 +121,9 @@ func (scs *SubcategoryService) GetServicesBySubcategory(ctx context.Context, req
 		total = int(*result.Found)
 	}
 
-	// Buscar categoria da subcategoria (primeiro serviço)
-	category := ""
-	if len(docs) > 0 {
+	// Determinar categoria: usar parâmetro fornecido ou extrair do primeiro serviço
+	category := req.Category
+	if category == "" && len(docs) > 0 {
 		category = docs[0].Category
 	}
 

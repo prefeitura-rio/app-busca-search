@@ -104,10 +104,12 @@ func (h *SubcategoryHandler) GetSubcategories(c *gin.Context) {
 // @Description 1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services
 // @Description 2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20
 // @Description 3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true
+// @Description 4. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos
 // @Tags subcategories
 // @Accept json
 // @Produce json
 // @Param subcategory path string true "Nome da subcategoria (ex: Ensino Fundamental, Vacinação)"
+// @Param category query string false "Nome da categoria pai para desambiguar subcategorias com nomes iguais (ex: Documentos, Educação)"
 // @Param page query int false "Número da página (mínimo: 1)" minimum(1) default(1)
 // @Param per_page query int false "Quantidade de serviços por página (máximo: 100)" minimum(1) maximum(100) default(10)
 // @Param include_inactive query bool false "Incluir serviços inativos/rascunhos (status != 1)" default(false)
@@ -129,6 +131,7 @@ func (h *SubcategoryHandler) GetServicesBySubcategory(c *gin.Context) {
 	// Parse query parameters
 	req := &models.SubcategoryServicesRequest{
 		Subcategory:     subcategory,
+		Category:        c.Query("category"),
 		Page:            parseIntQuery(c, "page", 1),
 		PerPage:         parseIntQuery(c, "per_page", 10),
 		IncludeInactive: c.Query("include_inactive") == "true",
