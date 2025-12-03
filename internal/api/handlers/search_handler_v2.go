@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
@@ -36,6 +37,8 @@ func NewSearchHandlerV2(searchService *services.SearchServiceV2) *SearchHandlerV
 // @Param threshold_keyword query number false "Score mínimo para busca keyword (0-1, filtra text_match normalizado)"
 // @Param threshold_semantic query number false "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)"
 // @Param threshold_hybrid query number false "Score mínimo para busca hybrid (0-1, filtra score híbrido)"
+// @Param search_fields query string false "Override dos campos de busca (comma-separated). Ex: titulo,descricao,conteudo"
+// @Param search_weights query string false "Override dos pesos de busca (comma-separated). Ex: 4,2,1"
 // @Success 200 {object} models.UnifiedSearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -43,7 +46,6 @@ func NewSearchHandlerV2(searchService *services.SearchServiceV2) *SearchHandlerV
 func (h *SearchHandlerV2) Search(c *gin.Context) {
 	var req models.SearchRequest
 
-	// Bind e validação
 	if err := c.ShouldBindQuery(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Parâmetros inválidos",
@@ -78,6 +80,19 @@ func (h *SearchHandlerV2) Search(c *gin.Context) {
 		}
 	}
 
+	// Validar search_fields e search_weights quando ambos são passados
+	if req.SearchFields != "" && req.SearchWeights != "" {
+		fieldsCount := len(strings.Split(req.SearchFields, ","))
+		weightsCount := len(strings.Split(req.SearchWeights, ","))
+		if fieldsCount != weightsCount {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Parâmetros inválidos",
+				"details": fmt.Sprintf("search_fields tem %d campos mas search_weights tem %d pesos", fieldsCount, weightsCount),
+			})
+			return
+		}
+	}
+
 	// Validar tipo de busca (v2 não suporta AI search ainda)
 	validTypes := map[models.SearchType]bool{
 		models.SearchTypeKeyword:  true,
@@ -93,7 +108,6 @@ func (h *SearchHandlerV2) Search(c *gin.Context) {
 		return
 	}
 
-	// Executar busca
 	result, err := h.searchService.Search(c.Request.Context(), &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{

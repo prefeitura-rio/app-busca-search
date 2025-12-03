@@ -71,6 +71,10 @@ type SearchRequest struct {
 	ExcludeAgentExclusive *bool           `form:"exclude_agent_exclusive"`
 	GenerateScores        bool            `form:"generate_scores"` // Gerar AI scores via LLM (apenas para type=ai)
 	RecencyBoost          bool            `form:"recency_boost"`   // Aplica boost por recência (docs recentes têm score maior)
+
+	// V2-only: Override search configuration per request
+	SearchFields  string `form:"search_fields"`  // Comma-separated fields (e.g., "titulo,descricao,conteudo")
+	SearchWeights string `form:"search_weights"` // Comma-separated weights (e.g., "4,2,1")
 }
 
 // ServiceDocument representa um documento de serviço retornado pela busca

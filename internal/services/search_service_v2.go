@@ -257,21 +257,26 @@ func (ss *SearchServiceV2) GetDocumentByID(ctx context.Context, id string, colle
 func (ss *SearchServiceV2) buildKeywordSearchParams(collName string, collConfig *config.CollectionConfig, req *models.SearchRequest) api.MultiSearchCollectionParameters {
 	queryStr := req.Query
 
-	// Build query_by from collection config
-	queryBy := fmt.Sprintf("%s,%s", collConfig.TitleField, collConfig.DescField)
-	if collName == "prefrio_services_base" {
-		queryBy += ",search_content"
+	// Override fields/weights from request, fallback to config
+	queryBy := collConfig.GetSearchFields()
+	if req.SearchFields != "" {
+		queryBy = req.SearchFields
+	}
+
+	queryByWeights := collConfig.GetSearchWeights()
+	if req.SearchWeights != "" {
+		queryByWeights = req.SearchWeights
 	}
 
 	params := api.MultiSearchCollectionParameters{
-		Collection: &collName,
-		Q:          &queryStr,
-		QueryBy:    &queryBy,
-		Page:       pointer.Int(1), // We paginate manually after combining results
-		PerPage:    pointer.Int(250),
+		Collection:     &collName,
+		Q:              &queryStr,
+		QueryBy:        &queryBy,
+		QueryByWeights: &queryByWeights,
+		Page:           pointer.Int(1),
+		PerPage:        pointer.Int(250),
 	}
 
-	// Add filter if collection requires it
 	if collConfig.FilterField != "" && !req.IncludeInactive {
 		filterBy := fmt.Sprintf("%s:=%s", collConfig.FilterField, collConfig.FilterValue)
 		params.FilterBy = &filterBy
@@ -303,22 +308,27 @@ func (ss *SearchServiceV2) buildSemanticSearchParams(collName string, collConfig
 func (ss *SearchServiceV2) buildHybridSearchParams(collName string, collConfig *config.CollectionConfig, req *models.SearchRequest, vectorQuery string) api.MultiSearchCollectionParameters {
 	queryStr := req.Query
 
-	// Build query_by from collection config
-	queryBy := fmt.Sprintf("%s,%s", collConfig.TitleField, collConfig.DescField)
-	if collName == "prefrio_services_base" {
-		queryBy += ",search_content"
+	// Override fields/weights from request, fallback to config
+	queryBy := collConfig.GetSearchFields()
+	if req.SearchFields != "" {
+		queryBy = req.SearchFields
+	}
+
+	queryByWeights := collConfig.GetSearchWeights()
+	if req.SearchWeights != "" {
+		queryByWeights = req.SearchWeights
 	}
 
 	params := api.MultiSearchCollectionParameters{
-		Collection:  &collName,
-		Q:           &queryStr,
-		QueryBy:     &queryBy,
-		VectorQuery: &vectorQuery,
-		Page:        pointer.Int(1),
-		PerPage:     pointer.Int(250),
+		Collection:     &collName,
+		Q:              &queryStr,
+		QueryBy:        &queryBy,
+		QueryByWeights: &queryByWeights,
+		VectorQuery:    &vectorQuery,
+		Page:           pointer.Int(1),
+		PerPage:        pointer.Int(250),
 	}
 
-	// Add filter if collection requires it
 	if collConfig.FilterField != "" && !req.IncludeInactive {
 		filterBy := fmt.Sprintf("%s:=%s", collConfig.FilterField, collConfig.FilterValue)
 		params.FilterBy = &filterBy
