@@ -2667,6 +2667,22 @@
             "schema": {
               "type": "number"
             }
+          },
+          {
+            "description": "Override dos campos de busca (comma-separated). Ex: titulo,descricao,conteudo",
+            "name": "search_fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Override dos pesos de busca (comma-separated). Ex: 4,2,1",
+            "name": "search_weights",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
