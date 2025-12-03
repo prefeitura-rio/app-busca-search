@@ -2483,7 +2483,7 @@
     },
     "/api/v1/subcategories/{subcategory}/services": {
       "get": {
-        "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true",
+        "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true\n4. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos",
         "tags": [
           "subcategories"
         ],
@@ -2494,6 +2494,14 @@
             "name": "subcategory",
             "in": "path",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Nome da categoria pai para desambiguar subcategorias com nomes iguais (ex: Documentos, Educação)",
+            "name": "category",
+            "in": "query",
             "schema": {
               "type": "string"
             }
