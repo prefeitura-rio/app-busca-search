@@ -71,6 +71,10 @@ type SearchRequest struct {
 	ExcludeAgentExclusive *bool           `form:"exclude_agent_exclusive"`
 	GenerateScores        bool            `form:"generate_scores"` // Gerar AI scores via LLM (apenas para type=ai)
 	RecencyBoost          bool            `form:"recency_boost"`   // Aplica boost por recência (docs recentes têm score maior)
+
+	// V2-only: Override search configuration per request
+	SearchFields  string `form:"search_fields"`  // Comma-separated fields (e.g., "titulo,descricao,conteudo")
+	SearchWeights string `form:"search_weights"` // Comma-separated weights (e.g., "4,2,1")
 }
 
 // ServiceDocument representa um documento de serviço retornado pela busca
@@ -79,6 +83,8 @@ type ServiceDocument struct {
 	Title       string                 `json:"title"`
 	Description string                 `json:"description"`
 	Category    string                 `json:"category"`
+	Subcategory *string                `json:"subcategory,omitempty"`
+	Slug        string                 `json:"slug,omitempty"`
 	Status      int32                  `json:"status"`
 	CreatedAt   int64                  `json:"created_at"`
 	UpdatedAt   int64                  `json:"updated_at"`
@@ -112,4 +118,30 @@ type QueryAnalysis struct {
 	SearchStrategy string   `json:"search_strategy"` // hybrid, semantic, keyword
 	Confidence     float64  `json:"confidence"`      // 0-1
 	PortalTags     []string `json:"portal_tags"`     // portal inferido
+}
+
+// ============================================================================
+// v2 API Models - Multi-Collection Search
+// ============================================================================
+
+// UnifiedDocument represents a document from any collection (v2 API)
+// Uses pure data passthrough - no field normalization
+type UnifiedDocument struct {
+	ID         string                 `json:"id"`
+	Collection string                 `json:"collection"` // Which collection this document belongs to
+	Type       string                 `json:"type"`       // Document type from collection config (service, course, job, etc.)
+	Data       map[string]interface{} `json:"data"`       // Raw document data from Typesense
+	ScoreInfo  *ScoreInfo             `json:"score_info,omitempty"`
+}
+
+// UnifiedSearchResponse represents multi-collection search response (v2 API)
+type UnifiedSearchResponse struct {
+	Results       []*UnifiedDocument     `json:"results"`
+	TotalCount    int                    `json:"total_count"`    // Total original do Typesense (across all collections)
+	FilteredCount int                    `json:"filtered_count"` // Após aplicar thresholds
+	Page          int                    `json:"page"`
+	PerPage       int                    `json:"per_page"`
+	SearchType    SearchType             `json:"search_type"`
+	Collections   []string               `json:"collections"`        // Which collections were searched
+	Metadata      map[string]interface{} `json:"metadata,omitempty"` // Para AI search
 }

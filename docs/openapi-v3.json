@@ -382,6 +382,14 @@
             }
           },
           {
+            "description": "Filtrar por subcategoria",
+            "name": "sub_categoria",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "description": "Filtrar por aguardando aprovação",
             "name": "awaiting_approval",
             "in": "query",
@@ -2059,6 +2067,114 @@
         ]
       }
     },
+    "/api/v1/categories/{category}/subcategories": {
+      "get": {
+        "description": "Retorna lista de subcategorias dentro de uma categoria pai, ordenadas por popularidade, quantidade de serviços ou ordem alfabética. Subcategorias são extraídas dinamicamente dos serviços via facet search no Typesense.\n\n**Casos de Uso:**\n1. Listar subcategorias: GET /api/v1/categories/Educação/subcategories\n2. Ordenar por quantidade: GET /api/v1/categories/Educação/subcategories?sort_by=count&order=desc\n3. Incluir vazias: GET /api/v1/categories/Educação/subcategories?include_empty=true",
+        "tags": [
+          "subcategories"
+        ],
+        "summary": "Lista subcategorias de uma categoria específica",
+        "parameters": [
+          {
+            "description": "Nome da categoria pai (ex: Educação, Saúde, Transporte)",
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Critério de ordenação",
+            "name": "sort_by",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "popularity",
+                "count",
+                "alpha"
+              ],
+              "default": "popularity"
+            }
+          },
+          {
+            "description": "Direção da ordenação",
+            "name": "order",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "description": "Incluir subcategorias sem serviços publicados",
+            "name": "include_empty",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Incluir serviços inativos/rascunhos (status != 1) nas contagens",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de subcategorias com metadados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SubcategoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetros inválidos (sort_by ou order)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno ao buscar subcategorias",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/search": {
       "get": {
         "description": "Executa busca com 4 estratégias: keyword (textual), semantic (vetorial), hybrid (combinada) ou ai (agente inteligente). Resposta inclui total_count (total do Typesense) e filtered_count (após aplicar thresholds).",
@@ -2252,6 +2368,416 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/services/{slug}": {
+      "get": {
+        "description": "Retorna os detalhes completos de um serviço através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual.",
+        "tags": [
+          "services"
+        ],
+        "summary": "Busca um serviço por slug SEO-friendly",
+        "parameters": [
+          {
+            "example": "matricula-escolar-abc123de",
+            "description": "Slug do serviço",
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.PrefRioService"
+                }
+              }
+            }
+          },
+          "301": {
+            "description": "Redirect para slug atual (inclui serviço e headers Location)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subcategories/{subcategory}/services": {
+      "get": {
+        "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true\n4. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos",
+        "tags": [
+          "subcategories"
+        ],
+        "summary": "Lista serviços de uma subcategoria específica",
+        "parameters": [
+          {
+            "description": "Nome da subcategoria (ex: Ensino Fundamental, Vacinação)",
+            "name": "subcategory",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Nome da categoria pai para desambiguar subcategorias com nomes iguais (ex: Documentos, Educação)",
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da página (mínimo: 1)",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "description": "Quantidade de serviços por página (máximo: 100)",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          },
+          {
+            "description": "Incluir serviços inativos/rascunhos (status != 1)",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de serviços da subcategoria com metadados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.SubcategoryServicesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Parâmetros inválidos (page ou per_page)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erro interno ao buscar serviços",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v2/search": {
+      "get": {
+        "description": "Executa busca em múltiplas coleções configuradas (services, courses, jobs). Suporta keyword, semantic e hybrid search. Retorna documentos com estrutura unificada incluindo campo 'collection' e 'type'.",
+        "tags": [
+          "search-v2"
+        ],
+        "summary": "Busca unificada multi-coleção (v2)",
+        "parameters": [
+          {
+            "description": "Texto da busca",
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tipo de busca: keyword, semantic, hybrid",
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Número da página (mínimo: 1)",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "description": "Resultados por página (máximo: 100)",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          },
+          {
+            "description": "Incluir documentos inativos (aplica-se apenas a coleções com filtro de status)",
+            "name": "include_inactive",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "description": "Alpha para busca hybrid (0-1). Alpha=0.3 significa 30% texto + 70% vetor.",
+            "name": "alpha",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "default": 0.3
+            }
+          },
+          {
+            "description": "Score mínimo para busca keyword (0-1, filtra text_match normalizado)",
+            "name": "threshold_keyword",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)",
+            "name": "threshold_semantic",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo para busca hybrid (0-1, filtra score híbrido)",
+            "name": "threshold_hybrid",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Override dos campos de busca (comma-separated). Ex: titulo,descricao,conteudo",
+            "name": "search_fields",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Override dos pesos de busca (comma-separated). Ex: 4,2,1",
+            "name": "search_weights",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.UnifiedSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v2/search/{id}": {
+      "get": {
+        "description": "Retorna documento de qualquer coleção configurada. Se 'collection' fornecido como query param, tenta buscar nessa coleção primeiro. Caso contrário, busca em todas as coleções configuradas.",
+        "tags": [
+          "search-v2"
+        ],
+        "summary": "Busca documento por ID em qualquer coleção configurada (v2)",
+        "parameters": [
+          {
+            "example": "cffe0736-80a6-46fe-ace6-3cebb4d262ea",
+            "description": "ID do documento (UUID)",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "example": "go-cursos",
+            "description": "Collection hint para busca otimizada",
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/models.UnifiedDocument"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -2794,11 +3320,23 @@
             "type": "string",
             "maxLength": 20000
           },
+          "slug": {
+            "type": "string"
+          },
+          "slug_history": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "status": {
             "description": "0=Draft, 1=Published",
             "type": "integer",
             "maximum": 1,
             "minimum": 0
+          },
+          "sub_categoria": {
+            "type": "string"
           },
           "tema_geral": {
             "type": "string",
@@ -2916,6 +3454,10 @@
             "maximum": 1,
             "minimum": 0
           },
+          "sub_categoria": {
+            "type": "string",
+            "maxLength": 20000
+          },
           "tema_geral": {
             "type": "string",
             "maxLength": 20000
@@ -2959,6 +3501,43 @@
           "to_version": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "models.ScoreInfo": {
+        "type": "object",
+        "properties": {
+          "final_score": {
+            "description": "Score final após aplicar recency boost",
+            "type": "number"
+          },
+          "hybrid_score": {
+            "description": "Score híbrido combinado 0-1",
+            "type": "number"
+          },
+          "passed_threshold": {
+            "description": "Se passou no threshold",
+            "type": "boolean"
+          },
+          "recency_factor": {
+            "description": "Fator de recência aplicado (1.0 = recente, decai com o tempo)",
+            "type": "number"
+          },
+          "text_match_normalized": {
+            "description": "Score normalizado 0-1 do text_match",
+            "type": "number"
+          },
+          "threshold_applied": {
+            "description": "Tipo de threshold aplicado: \"keyword\", \"semantic\", \"hybrid\", \"none\"",
+            "type": "string"
+          },
+          "threshold_value": {
+            "description": "Valor do threshold aplicado",
+            "type": "number"
+          },
+          "vector_similarity": {
+            "description": "Similaridade vetorial 0-1 (1 = idêntico)",
+            "type": "number"
           }
         }
       },
@@ -3029,8 +3608,14 @@
             "type": "object",
             "additionalProperties": true
           },
+          "slug": {
+            "type": "string"
+          },
           "status": {
             "type": "integer"
+          },
+          "subcategory": {
+            "type": "string"
           },
           "title": {
             "type": "string"
@@ -3203,6 +3788,71 @@
           }
         }
       },
+      "models.Subcategory": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "popularity_score": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.SubcategoryResponse": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "subcategories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.Subcategory"
+            }
+          },
+          "total_subcategories": {
+            "type": "integer"
+          }
+        }
+      },
+      "models.SubcategoryServicesResponse": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.ServiceDocument"
+            }
+          },
+          "subcategory": {
+            "type": "string"
+          },
+          "total_services": {
+            "type": "integer"
+          }
+        }
+      },
       "models.Tombamento": {
         "type": "object",
         "required": [
@@ -3289,6 +3939,70 @@
             "items": {
               "$ref": "#/components/schemas/models.Tombamento"
             }
+          }
+        }
+      },
+      "models.UnifiedDocument": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "description": "Which collection this document belongs to",
+            "type": "string"
+          },
+          "data": {
+            "description": "Raw document data from Typesense",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "id": {
+            "type": "string"
+          },
+          "score_info": {
+            "$ref": "#/components/schemas/models.ScoreInfo"
+          },
+          "type": {
+            "description": "Document type from collection config (service, course, job, etc.)",
+            "type": "string"
+          }
+        }
+      },
+      "models.UnifiedSearchResponse": {
+        "type": "object",
+        "properties": {
+          "collections": {
+            "description": "Which collections were searched",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "filtered_count": {
+            "description": "Após aplicar thresholds",
+            "type": "integer"
+          },
+          "metadata": {
+            "description": "Para AI search",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/models.UnifiedDocument"
+            }
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/models.SearchType"
+          },
+          "total_count": {
+            "description": "Total original do Typesense (across all collections)",
+            "type": "integer"
           }
         }
       },

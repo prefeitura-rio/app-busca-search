@@ -61,6 +61,22 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	categoryService := services.NewCategoryService(typesenseClient.GetClient(), popularityService)
 	categoryHandler := handlers.NewCategoryHandler(categoryService)
 
+	// Initialize subcategory services
+	subcategoryService := services.NewSubcategoryService(typesenseClient.GetClient(), popularityService)
+	subcategoryHandler := handlers.NewSubcategoryHandler(subcategoryService)
+
+	// Initialize v2 search service (multi-collection)
+	var embeddingService services.EmbeddingProvider
+	if geminiClient != nil {
+		embeddingService = services.NewGeminiEmbeddingProvider(geminiClient, cfg.GeminiEmbeddingModel, cache)
+	}
+	searchServiceV2 := services.NewSearchServiceV2(
+		typesenseClient.GetClient(),
+		embeddingService,
+		cfg,
+	)
+	searchHandlerV2 := handlers.NewSearchHandlerV2(searchServiceV2)
+
 	// Initialize migration services
 	schemaRegistry := schemas.NewRegistry()
 	migrationService := services.NewMigrationService(typesenseClient.GetClient(), schemaRegistry)
@@ -75,14 +91,30 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	r.GET("/readiness", healthHandler.Readiness) // K8s readiness probe
 	r.GET("/health", healthHandler.Health)       // Uptime monitoring (comprehensive)
 
+	// v1 API (services only - backward compatibility)
 	api := r.Group("/api/v1")
 	{
 		// Unified search endpoints
 		api.GET("/search", searchHandler.Search)
 		api.GET("/search/:id", searchHandler.GetDocumentByID)
 
+		// SEO-friendly service endpoint (by slug)
+		api.GET("/services/:slug", searchHandler.GetServiceBySlug)
+
 		// Category endpoints
 		api.GET("/categories", categoryHandler.GetCategories)
+
+		// Subcategory endpoints
+		api.GET("/categories/:category/subcategories", subcategoryHandler.GetSubcategories)
+		api.GET("/subcategories/:subcategory/services", subcategoryHandler.GetServicesBySubcategory)
+	}
+
+	// v2 API (multi-collection search)
+	apiV2 := r.Group("/api/v2")
+	{
+		// Multi-collection search endpoints
+		apiV2.GET("/search", searchHandlerV2.Search)
+		apiV2.GET("/search/:id", searchHandlerV2.GetDocumentByID)
 	}
 
 	// Rotas administrativas com autenticação JWT

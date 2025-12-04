@@ -145,6 +145,7 @@ type PrefRioService struct {
 	ServicoNaoCobre       string                 `json:"servico_nao_cobre" validate:"max=20000" typesense:"servico_nao_cobre,optional"`
 	LegislacaoRelacionada []string               `json:"legislacao_relacionada" typesense:"legislacao_relacionada,optional"`
 	TemaGeral             string                 `json:"tema_geral" validate:"required,max=20000" typesense:"tema_geral"`
+	SubCategoria          *string                `json:"sub_categoria,omitempty" typesense:"sub_categoria,optional"`
 	PublicoEspecifico     []string               `json:"publico_especifico,omitempty" typesense:"publico_especifico,optional"`
 	FixarDestaque         bool                   `json:"fixar_destaque" typesense:"fixar_destaque"`
 	AwaitingApproval      bool                   `json:"awaiting_approval" typesense:"awaiting_approval"`
@@ -158,6 +159,8 @@ type PrefRioService struct {
 	SearchContent         string                 `json:"search_content" typesense:"search_content"`
 	Buttons               []Button               `json:"buttons" typesense:"buttons,optional"`
 	Embedding             []float64              `json:"embedding,omitempty" typesense:"embedding,optional"`
+	Slug                  string                 `json:"slug" typesense:"slug"`
+	SlugHistory           []string               `json:"slug_history,omitempty" typesense:"slug_history,optional"`
 }
 
 // MarshalJSON customiza a serialização JSON para adicionar campos plaintext
@@ -199,6 +202,7 @@ type PrefRioServiceRequest struct {
 	ServicoNaoCobre       string                 `json:"servico_nao_cobre" validate:"max=20000"`
 	LegislacaoRelacionada []string               `json:"legislacao_relacionada"`
 	TemaGeral             string                 `json:"tema_geral" validate:"required,max=20000"`
+	SubCategoria          *string                `json:"sub_categoria,omitempty" validate:"omitempty,max=20000"`
 	PublicoEspecifico     []string               `json:"publico_especifico" validate:"required,min=1"`
 	FixarDestaque         bool                   `json:"fixar_destaque"`
 	AwaitingApproval      bool                   `json:"awaiting_approval"`

@@ -160,3 +160,72 @@ func (h *SearchHandler) GetDocumentByID(c *gin.Context) {
 
 	c.JSON(http.StatusOK, doc)
 }
+
+// GetServiceBySlug godoc
+// @Summary Busca um serviço por slug SEO-friendly
+// @Description Retorna os detalhes completos de um serviço através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual.
+// @Tags services
+// @Accept json
+// @Produce json
+// @Param slug path string true "Slug do serviço" example(matricula-escolar-abc123de)
+// @Success 200 {object} models.PrefRioService
+// @Success 301 {object} map[string]interface{} "Redirect para slug atual (inclui serviço e headers Location)"
+// @Failure 404 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /api/v1/services/{slug} [get]
+func (h *SearchHandler) GetServiceBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Slug do serviço é obrigatório",
+		})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Tenta buscar pelo slug atual
+	service, err := h.typesenseClient.GetPrefRioServiceBySlug(ctx, slug)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Erro ao buscar serviço",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if service != nil {
+		c.JSON(http.StatusOK, service)
+		return
+	}
+
+	// Não encontrou pelo slug atual, tenta buscar no histórico
+	service, err = h.typesenseClient.GetPrefRioServiceByHistoricalSlug(ctx, slug)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Erro ao buscar serviço",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	if service != nil {
+		// Encontrou no histórico - retorna 301 com redirect
+		newLocation := fmt.Sprintf("/api/v1/services/%s", service.Slug)
+		c.Header("Location", newLocation)
+		c.JSON(http.StatusMovedPermanently, gin.H{
+			"id":        service.ID,
+			"slug":      service.Slug,
+			"old_slug":  slug,
+			"message":   "Este serviço foi movido para uma nova URL",
+			"location":  newLocation,
+			"nome_servico": service.NomeServico,
+		})
+		return
+	}
+
+	// Não encontrou em lugar nenhum
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": "Serviço não encontrado",
+	})
+}
