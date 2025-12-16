@@ -2683,6 +2683,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "Filtrar busca por collections específicas (comma-separated). Ex: prefrio_services_base,hub_search. Se não especificado, busca em todas.",
+            "name": "collections",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
