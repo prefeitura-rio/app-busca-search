@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/config"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
@@ -57,7 +58,10 @@ func (ss *SearchServiceV2) Search(ctx context.Context, req *models.SearchRequest
 
 // KeywordSearch executes text-based search across multiple collections
 func (ss *SearchServiceV2) KeywordSearch(ctx context.Context, req *models.SearchRequest) (*models.UnifiedSearchResponse, error) {
-	collections := ss.config.SearchableCollections
+	collections, err := ss.getCollections(req.ParsedCollections)
+	if err != nil {
+		return nil, err
+	}
 
 	// Build search parameters for each collection
 	searches := make([]api.MultiSearchCollectionParameters, 0, len(collections))
@@ -112,7 +116,10 @@ func (ss *SearchServiceV2) SemanticSearch(ctx context.Context, req *models.Searc
 		return nil, fmt.Errorf("erro ao gerar embedding: %w", err)
 	}
 
-	collections := ss.config.SearchableCollections
+	collections, err := ss.getCollections(req.ParsedCollections)
+	if err != nil {
+		return nil, err
+	}
 
 	// Build vector query string
 	vectorQuery := buildVectorQueryString(embedding, 1.0) // alpha=1.0 for pure semantic
@@ -172,7 +179,10 @@ func (ss *SearchServiceV2) HybridSearch(ctx context.Context, req *models.SearchR
 		return ss.KeywordSearch(ctx, req)
 	}
 
-	collections := ss.config.SearchableCollections
+	collections, err := ss.getCollections(req.ParsedCollections)
+	if err != nil {
+		return nil, err
+	}
 
 	// Use provided alpha or default to 0.3
 	alpha := req.Alpha
@@ -253,6 +263,30 @@ func (ss *SearchServiceV2) GetDocumentByID(ctx context.Context, id string, colle
 // ============================================================================
 // Helper Methods
 // ============================================================================
+
+// getCollections returns the collections to search based on request or defaults to all configured collections.
+// Returns an error if any requested collection is not valid.
+func (ss *SearchServiceV2) getCollections(requestedCollections []string) ([]string, error) {
+	// If no collections specified, use all configured collections
+	if len(requestedCollections) == 0 {
+		return ss.config.SearchableCollections, nil
+	}
+
+	// Validate that all requested collections are valid
+	validCollections := make(map[string]bool)
+	for _, c := range ss.config.SearchableCollections {
+		validCollections[c] = true
+	}
+
+	for _, c := range requestedCollections {
+		if !validCollections[c] {
+			return nil, fmt.Errorf("collection '%s' não está configurada. Collections válidas: %s",
+				c, strings.Join(ss.config.SearchableCollections, ", "))
+		}
+	}
+
+	return requestedCollections, nil
+}
 
 func (ss *SearchServiceV2) buildKeywordSearchParams(collName string, collConfig *config.CollectionConfig, req *models.SearchRequest) api.MultiSearchCollectionParameters {
 	queryStr := req.Query

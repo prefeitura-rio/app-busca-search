@@ -39,6 +39,7 @@ func NewSearchHandlerV2(searchService *services.SearchServiceV2) *SearchHandlerV
 // @Param threshold_hybrid query number false "Score mínimo para busca hybrid (0-1, filtra score híbrido)"
 // @Param search_fields query string false "Override dos campos de busca (comma-separated). Ex: titulo,descricao,conteudo"
 // @Param search_weights query string false "Override dos pesos de busca (comma-separated). Ex: 4,2,1"
+// @Param collections query string false "Filtrar busca por collections específicas (comma-separated). Ex: prefrio_services_base,hub_search. Se não especificado, busca em todas."
 // @Success 200 {object} models.UnifiedSearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
@@ -90,6 +91,18 @@ func (h *SearchHandlerV2) Search(c *gin.Context) {
 				"details": fmt.Sprintf("search_fields tem %d campos mas search_weights tem %d pesos", fieldsCount, weightsCount),
 			})
 			return
+		}
+	}
+
+	// Parse collections parameter (comma-separated string to []string)
+	if req.Collections != "" {
+		collections := strings.Split(req.Collections, ",")
+		req.ParsedCollections = make([]string, 0, len(collections))
+		for _, c := range collections {
+			trimmed := strings.TrimSpace(c)
+			if trimmed != "" {
+				req.ParsedCollections = append(req.ParsedCollections, trimmed)
+			}
 		}
 	}
 

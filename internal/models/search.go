@@ -75,6 +75,10 @@ type SearchRequest struct {
 	// V2-only: Override search configuration per request
 	SearchFields  string `form:"search_fields"`  // Comma-separated fields (e.g., "titulo,descricao,conteudo")
 	SearchWeights string `form:"search_weights"` // Comma-separated weights (e.g., "4,2,1")
+	Collections   string `form:"collections"`    // Comma-separated collections to search (e.g., "prefrio_services_base,hub_search")
+
+	// Parsed collections (internal use, populated by handler)
+	ParsedCollections []string `form:"-" json:"-"`
 }
 
 // ServiceDocument representa um documento de serviço retornado pela busca

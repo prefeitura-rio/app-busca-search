@@ -19,4 +19,7 @@ var CategoriasValidas = []string{
 	"Esportes",
 	"Animais",
 	"Astronomia",
+	"Tributos",
+	"Obras",
+	"Ordem Pública",
 }
