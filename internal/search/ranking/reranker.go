@@ -26,7 +26,22 @@ func NewReranker(client *genai.Client, model string) *Reranker {
 	}
 }
 
-// Rerank re-ordena os top N resultados usando LLM
+// getRerankSchema retorna o schema JSON para saída estruturada do reranking
+func getRerankSchema() *genai.Schema {
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"ranked_ids": {
+				Type:        genai.TypeArray,
+				Description: "Array de IDs dos serviços ordenados por relevância (mais relevante primeiro)",
+				Items:       &genai.Schema{Type: genai.TypeString},
+			},
+		},
+		Required: []string{"ranked_ids"},
+	}
+}
+
+// Rerank re-ordena os top N resultados usando LLM com saída estruturada
 func (r *Reranker) Rerank(ctx context.Context, query string, docs []v3.Document, topN int) ([]v3.Document, error) {
 	if r.client == nil || len(docs) == 0 {
 		return docs, nil
@@ -61,14 +76,17 @@ Query: "%s"
 Serviços:
 %s
 
-Retorne JSON com array de IDs na ordem de relevância (mais relevante primeiro):
-{"ranked_ids": ["id1", "id2", "id3", ...]}
-
-Retorne APENAS o JSON.`, query, strings.Join(services, "\n"))
+Retorne os IDs na ordem de relevância (mais relevante primeiro).`, query, strings.Join(services, "\n"))
 
 	content := genai.NewContentFromText(prompt, genai.RoleUser)
 
-	resp, err := r.client.Models.GenerateContent(ctx, r.model, []*genai.Content{content}, nil)
+	// Configuração para saída estruturada
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   getRerankSchema(),
+	}
+
+	resp, err := r.client.Models.GenerateContent(ctx, r.model, []*genai.Content{content}, config)
 	if err != nil {
 		log.Printf("Erro no rerank: %v", err)
 		return docs, nil
@@ -78,15 +96,15 @@ Retorne APENAS o JSON.`, query, strings.Join(services, "\n"))
 		return docs, nil
 	}
 
-	// Parse response
+	// Com saída estruturada, o JSON é garantido
 	part := resp.Candidates[0].Content.Parts[0]
-	jsonStr := extractJSON(fmt.Sprintf("%v", part))
+	jsonStr := fmt.Sprintf("%v", part)
 
 	var result struct {
 		RankedIDs []string `json:"ranked_ids"`
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
-		log.Printf("Erro ao parsear rerank: %v", err)
+		log.Printf("Erro ao parsear rerank estruturado: %v", err)
 		return docs, nil
 	}
 
@@ -119,20 +137,3 @@ Retorne APENAS o JSON.`, query, strings.Join(services, "\n"))
 	return reranked, nil
 }
 
-func extractJSON(s string) string {
-	if idx := strings.Index(s, "```json"); idx != -1 {
-		s = s[idx+7:]
-		if endIdx := strings.Index(s, "```"); endIdx != -1 {
-			s = s[:endIdx]
-		}
-	} else if idx := strings.Index(s, "```"); idx != -1 {
-		s = s[idx+3:]
-		if endIdx := strings.Index(s, "```"); endIdx != -1 {
-			s = s[:endIdx]
-		}
-	}
-	if idx := strings.Index(s, "{"); idx != -1 {
-		s = s[idx:]
-	}
-	return strings.TrimSpace(s)
-}

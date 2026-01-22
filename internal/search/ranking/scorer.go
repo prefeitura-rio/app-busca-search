@@ -100,17 +100,28 @@ func (s *Scorer) Calculate(hit Hit, searchType v3.SearchType) *ScoreResult {
 	case v3.SearchTypeKeyword:
 		result.HybridScore = result.TextScore
 	case v3.SearchTypeSemantic:
-		if result.VectorScore == 0 && result.TextScore > 0 {
-			// Fallback: usa text score se não há embedding
-			result.HybridScore = result.TextScore * 0.5 // Penaliza por não ter embedding
+		if result.VectorScore == 0 {
+			if result.TextScore > 0 {
+				// Fallback: usa text score se não há embedding
+				result.HybridScore = result.TextScore * 0.5
+			} else {
+				// Sem embedding e sem text match = score mínimo
+				result.HybridScore = 0.01
+			}
 		} else {
 			result.HybridScore = result.VectorScore
 		}
 	case v3.SearchTypeHybrid, v3.SearchTypeAI:
 		alpha := s.config.Alpha
-		if result.VectorScore == 0 && result.TextScore > 0 {
-			// Fallback para documentos sem embedding: usa apenas text score com penalidade
+		if result.VectorScore == 0 && result.TextScore == 0 {
+			// Sem embedding e sem text match = score mínimo
+			result.HybridScore = 0.01
+		} else if result.VectorScore == 0 && result.TextScore > 0 {
+			// Sem embedding mas tem text match: usa text score com penalidade
 			result.HybridScore = result.TextScore * 0.7
+		} else if result.TextScore == 0 && result.VectorScore > 0 {
+			// Sem text match mas tem embedding: usa vector score com penalidade
+			result.HybridScore = result.VectorScore * 0.8
 		} else {
 			result.HybridScore = alpha*result.TextScore + (1-alpha)*result.VectorScore
 		}

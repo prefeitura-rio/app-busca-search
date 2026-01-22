@@ -41,7 +41,46 @@ func NewAnalyzer(client *genai.Client, model string) *Analyzer {
 	}
 }
 
-// Analyze analisa a query com LLM
+// getAnalysisSchema retorna o schema JSON para saída estruturada
+func getAnalysisSchema() *genai.Schema {
+	return &genai.Schema{
+		Type: genai.TypeObject,
+		Properties: map[string]*genai.Schema{
+			"intent": {
+				Type:        genai.TypeString,
+				Description: "O que o usuário quer fazer: buscar_servico, listar_categoria, ou esclarecer_duvida",
+				Enum:        []string{"buscar_servico", "listar_categoria", "esclarecer_duvida"},
+			},
+			"keywords": {
+				Type:        genai.TypeArray,
+				Description: "Palavras-chave principais extraídas da query (máximo 5)",
+				Items:       &genai.Schema{Type: genai.TypeString},
+			},
+			"categories": {
+				Type:        genai.TypeArray,
+				Description: "Categorias prováveis do serviço buscado",
+				Items:       &genai.Schema{Type: genai.TypeString},
+			},
+			"refined_queries": {
+				Type:        genai.TypeArray,
+				Description: "Até 2 reformulações mais claras da query",
+				Items:       &genai.Schema{Type: genai.TypeString},
+			},
+			"search_strategy": {
+				Type:        genai.TypeString,
+				Description: "Estratégia de busca recomendada",
+				Enum:        []string{"keyword", "semantic", "hybrid"},
+			},
+			"confidence": {
+				Type:        genai.TypeNumber,
+				Description: "Confiança na análise, de 0 a 1",
+			},
+		},
+		Required: []string{"intent", "keywords", "search_strategy", "confidence"},
+	}
+}
+
+// Analyze analisa a query com LLM usando saída estruturada
 func (a *Analyzer) Analyze(ctx context.Context, query string) (*QueryAnalysis, error) {
 	if a.client == nil {
 		return a.defaultAnalysis(query), nil
@@ -52,37 +91,31 @@ func (a *Analyzer) Analyze(ctx context.Context, query string) (*QueryAnalysis, e
 		return cached, nil
 	}
 
-	// Timeout
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// Timeout reduzido para não bloquear a busca
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	prompt := fmt.Sprintf(`Analise esta query de busca de serviços públicos da Prefeitura do Rio de Janeiro:
 
 Query: "%s"
 
-Retorne JSON com:
-{
-  "intent": "buscar_servico|listar_categoria|esclarecer_duvida",
-  "keywords": ["palavra1", "palavra2"],
-  "categories": ["Educação", "Saúde", "Transporte"],
-  "refined_queries": ["variação 1", "variação 2"],
-  "search_strategy": "keyword|semantic|hybrid",
-  "confidence": 0.85
-}
-
 Regras:
 - intent: o que o usuário quer fazer
 - keywords: termos-chave principais (max 5)
-- categories: categorias prováveis do serviço buscado
+- categories: categorias prováveis do serviço buscado (ex: Educação, Saúde, Transporte, Tributos)
 - refined_queries: max 2 reformulações mais claras da query
 - search_strategy: keyword para termos exatos, semantic para conceituais, hybrid para misto
-- confidence: 0-1 (quão claro é o intent)
-
-Retorne APENAS o JSON.`, query)
+- confidence: 0-1 (quão claro é o intent)`, query)
 
 	content := genai.NewContentFromText(prompt, genai.RoleUser)
 
-	resp, err := a.client.Models.GenerateContent(ctx, a.model, []*genai.Content{content}, nil)
+	// Configuração para saída estruturada (structured output)
+	config := &genai.GenerateContentConfig{
+		ResponseMIMEType: "application/json",
+		ResponseSchema:   getAnalysisSchema(),
+	}
+
+	resp, err := a.client.Models.GenerateContent(ctx, a.model, []*genai.Content{content}, config)
 	if err != nil {
 		log.Printf("Erro ao analisar query: %v", err)
 		return a.defaultAnalysis(query), nil
@@ -92,13 +125,13 @@ Retorne APENAS o JSON.`, query)
 		return a.defaultAnalysis(query), nil
 	}
 
-	// Parse JSON
+	// Com saída estruturada, o JSON é garantido
 	part := resp.Candidates[0].Content.Parts[0]
-	jsonStr := extractJSON(fmt.Sprintf("%v", part))
+	jsonStr := fmt.Sprintf("%v", part)
 
 	var analysis QueryAnalysis
 	if err := json.Unmarshal([]byte(jsonStr), &analysis); err != nil {
-		log.Printf("Erro ao parsear análise: %v", err)
+		log.Printf("Erro ao parsear análise estruturada: %v", err)
 		return a.defaultAnalysis(query), nil
 	}
 
@@ -136,25 +169,3 @@ func (a *Analyzer) setCache(query string, analysis *QueryAnalysis) {
 	a.cacheTime[query] = time.Now()
 }
 
-// extractJSON extrai JSON de uma resposta que pode ter markdown
-func extractJSON(s string) string {
-	// Remove markdown code blocks
-	if idx := strings.Index(s, "```json"); idx != -1 {
-		s = s[idx+7:]
-		if endIdx := strings.Index(s, "```"); endIdx != -1 {
-			s = s[:endIdx]
-		}
-	} else if idx := strings.Index(s, "```"); idx != -1 {
-		s = s[idx+3:]
-		if endIdx := strings.Index(s, "```"); endIdx != -1 {
-			s = s[:endIdx]
-		}
-	}
-
-	// Encontra início do JSON
-	if idx := strings.Index(s, "{"); idx != -1 {
-		s = s[idx:]
-	}
-
-	return strings.TrimSpace(s)
-}
