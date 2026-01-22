@@ -4444,6 +4444,9 @@
           "final": {
             "type": "number"
           },
+          "hybrid": {
+            "type": "number"
+          },
           "popularity": {
             "type": "number"
           },
