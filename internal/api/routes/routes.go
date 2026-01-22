@@ -136,7 +136,7 @@ func SetupRouter(cfg *config.Config) *gin.Engine {
 	}
 
 	// v3 API (new architecture with synonyms, query expansion, etc.)
-	searchEngineV3 := initializeSearchEngineV3(cfg, typesenseClient, geminiClient, typesenseURL)
+	searchEngineV3 := initializeSearchEngineV3(cfg, typesenseClient, geminiClient, typesenseURL, popularityService)
 	searchHandlerV3 := handlers.NewSearchHandlerV3(searchEngineV3)
 
 	apiV3 := r.Group("/api/v3")
@@ -236,6 +236,7 @@ func initializeSearchEngineV3(
 	typesenseClient *typesense.Client,
 	geminiClient *genai.Client,
 	typesenseURL string,
+	popularityService *services.PopularityService,
 ) *search.Engine {
 	// Adapter Typesense
 	typesenseAdapter := adapter.NewTypesenseAdapter(
@@ -282,11 +283,12 @@ func initializeSearchEngineV3(
 		}
 	}
 
-	// Cria engine
+	// Cria engine com popularity service
 	engine := search.NewEngine(
 		typesenseAdapter,
 		geminiAdapter,
 		synonymService,
+		popularityService,
 		collectionConfigs,
 		"prefrio_services_base",
 	)

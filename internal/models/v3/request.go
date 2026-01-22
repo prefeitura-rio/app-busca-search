@@ -1,5 +1,7 @@
 package v3
 
+import "strings"
+
 // SearchRequest representa uma requisição de busca v3
 type SearchRequest struct {
 	// Obrigatórios
@@ -28,11 +30,20 @@ type SearchRequest struct {
 	Typos   *int  `form:"typos"`   // tolerância a typos (0-2)
 
 	// Filtros
-	Status   *int   `form:"status"`   // filtrar por status
-	Category string `form:"category"` // filtrar por categoria
+	Status      *int   `form:"status"`       // filtrar por status
+	Category    string `form:"category"`     // filtrar por categoria
+	SubCategory string `form:"sub_category"` // filtrar por subcategoria
+	OrgaoGestor string `form:"orgao"`        // filtrar por órgão gestor
+	TempoMax    string `form:"tempo_max"`    // filtrar por tempo máximo (imediato, 1_dia, etc)
+	IsFree      *bool  `form:"is_free"`      // filtrar por gratuidade
+	HasDigital  *bool  `form:"digital"`      // filtrar por canal digital disponível
+
+	// Campos a retornar (comma-separated)
+	Fields string `form:"fields"`
 
 	// Interno (preenchido pelo handler)
 	ParsedCollections []string `form:"-" json:"-"`
+	ParsedFields      []string `form:"-" json:"-"`
 }
 
 // Validate valida e aplica defaults à requisição
@@ -103,4 +114,33 @@ func (r *SearchRequest) GetTypos() int {
 		return 1
 	}
 	return 2
+}
+
+// ParseFields parsea o parâmetro fields em uma lista
+func (r *SearchRequest) ParseFields() {
+	if r.Fields == "" {
+		r.ParsedFields = nil
+		return
+	}
+	parts := strings.Split(r.Fields, ",")
+	r.ParsedFields = make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			r.ParsedFields = append(r.ParsedFields, p)
+		}
+	}
+}
+
+// HasField verifica se um campo específico foi solicitado
+func (r *SearchRequest) HasField(field string) bool {
+	if len(r.ParsedFields) == 0 {
+		return true // Se não especificou, retorna todos
+	}
+	for _, f := range r.ParsedFields {
+		if f == field {
+			return true
+		}
+	}
+	return false
 }

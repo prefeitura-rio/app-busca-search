@@ -21,3 +21,19 @@ test:
 # Frontend dev server
 frontend:
     cd frontend && npm run dev
+
+# Reindex commands
+reindex-all:
+    go run cmd/reindex/main.go --collection=prefrio_services_base --mode=all
+
+reindex-missing:
+    go run cmd/reindex/main.go --collection=prefrio_services_base --missing-only
+
+reindex-dry:
+    go run cmd/reindex/main.go --collection=prefrio_services_base --mode=all --dry-run
+
+reindex-content:
+    go run cmd/reindex/main.go --collection=prefrio_services_base --mode=content-only
+
+reindex-embeddings:
+    go run cmd/reindex/main.go --collection=prefrio_services_base --mode=embedding-only

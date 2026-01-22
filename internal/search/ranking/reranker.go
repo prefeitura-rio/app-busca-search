@@ -35,18 +35,23 @@ func (r *Reranker) Rerank(ctx context.Context, query string, docs []v3.Document,
 	if topN <= 0 || topN > len(docs) {
 		topN = len(docs)
 	}
-	if topN > 10 {
-		topN = 10 // Limita para não sobrecarregar o LLM
+	if topN > 5 {
+		topN = 5 // Reduzido para melhorar performance e latência
 	}
 
-	// Prepara lista para o LLM
+	// Prepara lista para o LLM (formato mais compacto)
 	topDocs := docs[:topN]
 	services := make([]string, len(topDocs))
 	for i, doc := range topDocs {
-		services[i] = fmt.Sprintf("%d. [ID:%s] %s - %s", i+1, doc.ID, doc.Title, doc.Description)
+		// Limita descrição para reduzir tokens
+		desc := doc.Description
+		if len(desc) > 100 {
+			desc = desc[:100] + "..."
+		}
+		services[i] = fmt.Sprintf("%d. [%s] %s: %s", i+1, doc.ID, doc.Title, desc)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	prompt := fmt.Sprintf(`Reordene estes serviços por relevância para a query do usuário.

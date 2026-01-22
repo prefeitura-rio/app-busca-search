@@ -15,13 +15,15 @@ import (
 
 // Engine é o motor de busca v3
 type Engine struct {
-	typesense       *adapter.TypesenseAdapter
-	gemini          *adapter.GeminiAdapter
-	parser          *query.Parser
-	expander        *query.Expander
-	analyzer        *query.Analyzer
-	synonymService  *synonyms.Service
-	reranker        *ranking.Reranker
+	typesense         *adapter.TypesenseAdapter
+	gemini            *adapter.GeminiAdapter
+	parser            *query.Parser
+	expander          *query.Expander
+	analyzer          *query.Analyzer
+	synonymService    *synonyms.Service
+	reranker          *ranking.Reranker
+	popularity        ranking.PopularityProvider
+	cache             *SearchCache
 	collectionConfigs map[string]*v3.CollectionConfig
 	defaultCollection string
 }
@@ -31,6 +33,7 @@ func NewEngine(
 	typesense *adapter.TypesenseAdapter,
 	gemini *adapter.GeminiAdapter,
 	synonymService *synonyms.Service,
+	popularity ranking.PopularityProvider,
 	collectionConfigs map[string]*v3.CollectionConfig,
 	defaultCollection string,
 ) *Engine {
@@ -50,6 +53,8 @@ func NewEngine(
 		analyzer:          analyzerInstance,
 		synonymService:    synonymService,
 		reranker:          rerankerInstance,
+		popularity:        popularity,
+		cache:             NewSearchCache(2*time.Minute, 500),
 		collectionConfigs: collectionConfigs,
 		defaultCollection: defaultCollection,
 	}
@@ -65,6 +70,15 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 		return nil, err
 	}
 
+	// Verifica cache (exceto para busca AI que tem análise dinâmica)
+	var cacheKey string
+	if req.Type != v3.SearchTypeAI && e.cache != nil {
+		cacheKey = e.cache.GenerateKey(req)
+		if cached := e.cache.Get(cacheKey); cached != nil {
+			return cached, nil
+		}
+	}
+
 	// Configura busca baseada no modo
 	config := v3.ConfigForMode(req.Mode)
 	config.ApplyRequest(req)
@@ -73,6 +87,29 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 	collections := e.resolveCollections(req.ParsedCollections)
 	if len(collections) == 0 {
 		return nil, ErrNoCollections
+	}
+
+	// 0. Análise AI (para busca AI)
+	var aiAnalysis *v3.AIAnalysis
+	if req.Type == v3.SearchTypeAI && e.analyzer != nil {
+		analysis, _ := e.analyzer.Analyze(ctx, req.Query)
+		if analysis != nil {
+			aiAnalysis = &v3.AIAnalysis{
+				Intent:         analysis.Intent,
+				Keywords:       analysis.Keywords,
+				Categories:     analysis.Categories,
+				RefinedQueries: analysis.RefinedQueries,
+				SearchStrategy: analysis.SearchStrategy,
+				Confidence:     analysis.Confidence,
+			}
+			// Usa categorias inferidas como filtro se não especificada
+			if req.Category == "" && len(analysis.Categories) > 0 {
+				// Usa a primeira categoria inferida com alta confiança
+				if analysis.Confidence >= 0.7 {
+					req.Category = analysis.Categories[0]
+				}
+			}
+		}
 	}
 
 	// 1. Parse da query
@@ -132,6 +169,21 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 	if req.Category != "" {
 		filters["tema_geral"] = req.Category
 	}
+	if req.SubCategory != "" {
+		filters["subtema"] = req.SubCategory
+	}
+	if req.OrgaoGestor != "" {
+		filters["orgao_gestor"] = req.OrgaoGestor
+	}
+	if req.TempoMax != "" {
+		filters["prazo"] = req.TempoMax
+	}
+	if req.IsFree != nil {
+		filters["gratuito"] = *req.IsFree
+	}
+	if req.HasDigital != nil {
+		filters["canal_digital"] = *req.HasDigital
+	}
 
 	// Busca em todas as collections
 	allDocs := make([]v3.Document, 0)
@@ -166,7 +218,7 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 		collConfig := e.collectionConfigs[collName]
 
 		// Prepara normalização para scores vetoriais
-		scorer := ranking.NewScorer(config)
+		scorer := ranking.NewScorerWithPopularity(config, e.popularity)
 		scorer.PrepareNormalization(result.Hits)
 
 		// Transforma hits em documentos
@@ -179,7 +231,7 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 	}
 
 	// 6. Ordena por score
-	scorer := ranking.NewScorer(config)
+	scorer := ranking.NewScorerWithPopularity(config, e.popularity)
 	scorer.RankDocuments(allDocs)
 
 	// 7. Aplica threshold
@@ -187,9 +239,9 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 		allDocs = scorer.FilterByThreshold(allDocs, config.MinScore)
 	}
 
-	// 8. Re-rank com LLM (apenas para AI search)
+	// 8. Re-rank com LLM (apenas para AI search, topN=5 para melhor performance)
 	if req.Type == v3.SearchTypeAI && e.reranker != nil && len(allDocs) > 0 {
-		reranked, _ := e.reranker.Rerank(ctx, req.Query, allDocs, 10)
+		reranked, _ := e.reranker.Rerank(ctx, req.Query, allDocs, 5)
 		if reranked != nil {
 			allDocs = reranked
 		}
@@ -207,7 +259,13 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 			Normalized: expanded.Normalized,
 			Expanded:   expanded.ExpandedTerms,
 		},
-		Timing: *timing,
+		Timing:     *timing,
+		AIAnalysis: aiAnalysis,
+	}
+
+	// Armazena no cache (exceto busca AI)
+	if cacheKey != "" && e.cache != nil {
+		e.cache.Set(cacheKey, response)
 	}
 
 	return response, nil
@@ -255,10 +313,11 @@ func (e *Engine) transformDocument(
 		Type:       "service",
 		Data:       hit.Document,
 		Score: v3.ScoreInfo{
-			Final:   score.FinalScore,
-			Text:    score.TextScore,
-			Vector:  score.VectorScore,
-			Recency: score.RecencyScore,
+			Final:      score.FinalScore,
+			Text:       score.TextScore,
+			Vector:     score.VectorScore,
+			Recency:    score.RecencyScore,
+			Popularity: score.PopularityScore,
 		},
 	}
 

@@ -8,13 +8,19 @@ import (
 	"github.com/prefeitura-rio/app-busca-search/internal/models/v3"
 )
 
+// PopularityProvider interface para obter popularidade de categorias
+type PopularityProvider interface {
+	GetCategoryPopularity(category string) int
+}
+
 // ScoreResult contém os scores calculados
 type ScoreResult struct {
-	TextScore    float64
-	VectorScore  float64
-	HybridScore  float64
-	RecencyScore float64
-	FinalScore   float64
+	TextScore       float64
+	VectorScore     float64
+	HybridScore     float64
+	RecencyScore    float64
+	PopularityScore float64
+	FinalScore      float64
 }
 
 // Hit representa um resultado do Typesense
@@ -26,15 +32,28 @@ type Hit struct {
 
 // Scorer calcula scores para resultados de busca
 type Scorer struct {
-	normalizer *Normalizer
-	config     *v3.SearchConfig
+	normalizer  *Normalizer
+	config      *v3.SearchConfig
+	popularity  PopularityProvider
+	maxPopularity float64
 }
 
 // NewScorer cria um novo scorer
 func NewScorer(config *v3.SearchConfig) *Scorer {
 	return &Scorer{
-		normalizer: NewNormalizer(),
-		config:     config,
+		normalizer:    NewNormalizer(),
+		config:        config,
+		maxPopularity: 5000.0, // Maior valor de popularidade
+	}
+}
+
+// NewScorerWithPopularity cria um scorer com serviço de popularidade
+func NewScorerWithPopularity(config *v3.SearchConfig, popularity PopularityProvider) *Scorer {
+	return &Scorer{
+		normalizer:    NewNormalizer(),
+		config:        config,
+		popularity:    popularity,
+		maxPopularity: 5000.0,
 	}
 }
 
@@ -76,27 +95,70 @@ func (s *Scorer) Calculate(hit Hit, searchType v3.SearchType) *ScoreResult {
 		result.VectorScore = s.normalizer.MinMaxNormalizeVector(float64(*hit.VectorDistance))
 	}
 
-	// Hybrid score
+	// Hybrid score com fallback para documentos sem embedding
 	switch searchType {
 	case v3.SearchTypeKeyword:
 		result.HybridScore = result.TextScore
 	case v3.SearchTypeSemantic:
-		result.HybridScore = result.VectorScore
+		if result.VectorScore == 0 && result.TextScore > 0 {
+			// Fallback: usa text score se não há embedding
+			result.HybridScore = result.TextScore * 0.5 // Penaliza por não ter embedding
+		} else {
+			result.HybridScore = result.VectorScore
+		}
 	case v3.SearchTypeHybrid, v3.SearchTypeAI:
 		alpha := s.config.Alpha
-		result.HybridScore = alpha*result.TextScore + (1-alpha)*result.VectorScore
+		if result.VectorScore == 0 && result.TextScore > 0 {
+			// Fallback para documentos sem embedding: usa apenas text score com penalidade
+			result.HybridScore = result.TextScore * 0.7
+		} else {
+			result.HybridScore = alpha*result.TextScore + (1-alpha)*result.VectorScore
+		}
 	}
 
 	// Recency score
 	if s.config.RecencyBoost {
 		result.RecencyScore = s.calculateRecency(hit.Document)
-		result.FinalScore = result.HybridScore * result.RecencyScore
 	} else {
 		result.RecencyScore = 1.0
-		result.FinalScore = result.HybridScore
 	}
 
+	// Popularity score
+	result.PopularityScore = s.calculatePopularity(hit.Document)
+
+	// Final score: hybrid * recency * popularity
+	result.FinalScore = result.HybridScore * result.RecencyScore * result.PopularityScore
+
 	return result
+}
+
+// calculatePopularity calcula fator de popularidade (1.0 - 1.1)
+func (s *Scorer) calculatePopularity(doc map[string]interface{}) float64 {
+	if s.popularity == nil {
+		return 1.0
+	}
+
+	category := ""
+	if v, ok := doc["tema_geral"].(string); ok {
+		category = v
+	} else if v, ok := doc["category"].(string); ok {
+		category = v
+	}
+
+	if category == "" {
+		return 1.0
+	}
+
+	pop := float64(s.popularity.GetCategoryPopularity(category))
+	if pop <= 0 {
+		return 1.0
+	}
+
+	// Normaliza para 0-1 e aplica boost máximo de 10%
+	normalized := pop / s.maxPopularity
+	boost := 1.0 + (normalized * 0.1)
+
+	return math.Min(1.1, boost)
 }
 
 // RankDocuments ordena documentos por score
