@@ -2826,7 +2826,7 @@
     },
     "/api/v3/search": {
       "get": {
-        "description": "Busca multi-collection com suporte a keyword, semantic, hybrid e AI. Inclui sinônimos, query expansion e modos human/agent.",
+        "description": "Busca multi-collection com suporte a keyword, semantic, hybrid e AI. Inclui sinônimos, query expansion, modos human/agent, cache e AI analysis.",
         "tags": [
           "search-v3"
         ],
@@ -2875,7 +2875,7 @@
             }
           },
           {
-            "description": "Modo: human ou agent (default: human)",
+            "description": "Modo: human ou agent (default: human). Agent retorna resposta compacta.",
             "name": "mode",
             "in": "query",
             "schema": {
@@ -2933,6 +2933,54 @@
           {
             "description": "Filtrar por categoria",
             "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por subcategoria",
+            "name": "sub_category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por órgão gestor",
+            "name": "orgao",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por tempo máximo (imediato, 1_dia, etc)",
+            "name": "tempo_max",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filtrar por gratuidade",
+            "name": "is_free",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Filtrar por canal digital disponível",
+            "name": "digital",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Campos a retornar (comma-separated): title,description,category,score,buttons,data",
+            "name": "fields",
             "in": "query",
             "schema": {
               "type": "string"
@@ -4278,6 +4326,38 @@
           }
         }
       },
+      "v3.AIAnalysis": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "refined_queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "search_strategy": {
+            "type": "string"
+          }
+        }
+      },
       "v3.Document": {
         "type": "object",
         "properties": {
@@ -4364,6 +4444,9 @@
           "final": {
             "type": "number"
           },
+          "popularity": {
+            "type": "number"
+          },
           "recency": {
             "type": "number"
           },
@@ -4378,6 +4461,9 @@
       "v3.SearchResponse": {
         "type": "object",
         "properties": {
+          "ai_analysis": {
+            "$ref": "#/components/schemas/v3.AIAnalysis"
+          },
           "pagination": {
             "$ref": "#/components/schemas/v3.Pagination"
           },
