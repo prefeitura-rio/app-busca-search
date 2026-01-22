@@ -2824,6 +2824,224 @@
         ]
       }
     },
+    "/api/v3/search": {
+      "get": {
+        "description": "Busca multi-collection com suporte a keyword, semantic, hybrid e AI. Inclui sinônimos, query expansion e modos human/agent.",
+        "tags": [
+          "search-v3"
+        ],
+        "summary": "Busca unificada v3",
+        "parameters": [
+          {
+            "description": "Query de busca",
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tipo: keyword, semantic, hybrid, ai",
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Página (default: 1)",
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Resultados por página (default: 10, max: 100)",
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Collections (comma-separated)",
+            "name": "collections",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Modo: human ou agent (default: human)",
+            "name": "mode",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Peso texto vs vetor (0-1, default: 0.3)",
+            "name": "alpha",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Score mínimo (0-1)",
+            "name": "threshold",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "description": "Expandir query com sinônimos",
+            "name": "expand",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Boost por recência",
+            "name": "recency",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Tolerância a typos (0-2)",
+            "name": "typos",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filtrar por status",
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Filtrar por categoria",
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/v3.SearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v3/search/{id}": {
+      "get": {
+        "description": "Retorna um documento específico pelo ID",
+        "tags": [
+          "search-v3"
+        ],
+        "summary": "Busca documento por ID",
+        "parameters": [
+          {
+            "description": "ID do documento",
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Collection do documento",
+            "name": "collection",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/v3.Document"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/health": {
       "get": {
         "description": "Verifica a saúde completa da aplicação (para monitoramento externo de uptime)",
@@ -4057,6 +4275,143 @@
             "items": {
               "$ref": "#/components/schemas/models.ServiceVersion"
             }
+          }
+        }
+      },
+      "v3.Document": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "collection": {
+            "type": "string"
+          },
+          "data": {
+            "description": "Dados originais",
+            "type": "object",
+            "additionalProperties": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "score": {
+            "description": "Score",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/v3.ScoreInfo"
+              }
+            ]
+          },
+          "slug": {
+            "type": "string"
+          },
+          "title": {
+            "description": "Campos padronizados",
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "v3.Pagination": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "total_pages": {
+            "type": "integer"
+          }
+        }
+      },
+      "v3.QueryMeta": {
+        "type": "object",
+        "properties": {
+          "expanded": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "intent": {
+            "type": "string"
+          },
+          "normalized": {
+            "type": "string"
+          },
+          "original": {
+            "type": "string"
+          }
+        }
+      },
+      "v3.ScoreInfo": {
+        "type": "object",
+        "properties": {
+          "final": {
+            "type": "number"
+          },
+          "recency": {
+            "type": "number"
+          },
+          "text": {
+            "type": "number"
+          },
+          "vector": {
+            "type": "number"
+          }
+        }
+      },
+      "v3.SearchResponse": {
+        "type": "object",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/v3.Pagination"
+          },
+          "query": {
+            "$ref": "#/components/schemas/v3.QueryMeta"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/v3.Document"
+            }
+          },
+          "timing": {
+            "$ref": "#/components/schemas/v3.TimingMeta"
+          }
+        }
+      },
+      "v3.TimingMeta": {
+        "type": "object",
+        "properties": {
+          "embedding_ms": {
+            "type": "number"
+          },
+          "parsing_ms": {
+            "type": "number"
+          },
+          "ranking_ms": {
+            "type": "number"
+          },
+          "search_ms": {
+            "type": "number"
+          },
+          "total_ms": {
+            "type": "number"
           }
         }
       }
