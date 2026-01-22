@@ -1,5 +1,7 @@
 package synonyms
 
+import "strings"
+
 // SynonymGroup representa um grupo de sinônimos
 type SynonymGroup struct {
 	Root     string   // termo principal
@@ -114,7 +116,7 @@ func GetAllSynonyms() map[string][]string {
 	return result
 }
 
-// FindSynonyms busca sinônimos para um termo
+// FindSynonyms busca sinônimos para um termo (token único)
 func FindSynonyms(term string) []string {
 	for _, group := range DefaultSynonyms {
 		if group.Root == term {
@@ -126,6 +128,36 @@ func FindSynonyms(term string) []string {
 				result := []string{group.Root}
 				for _, s := range group.Synonyms {
 					if s != term {
+						result = append(result, s)
+					}
+				}
+				return result
+			}
+		}
+	}
+	return nil
+}
+
+// FindSynonymsByPhrase busca sinônimos por frase completa (case-insensitive)
+// Isso permite expansão bidirecional: "imposto predial" -> "iptu" e vice-versa
+func FindSynonymsByPhrase(phrase string) []string {
+	normalized := strings.ToLower(strings.TrimSpace(phrase))
+	if normalized == "" {
+		return nil
+	}
+
+	for _, group := range DefaultSynonyms {
+		// Check if phrase matches root (case-insensitive)
+		if strings.ToLower(group.Root) == normalized {
+			return group.Synonyms
+		}
+		// Check if phrase matches any synonym (case-insensitive)
+		for _, syn := range group.Synonyms {
+			if strings.ToLower(syn) == normalized {
+				// Retorna root + outros sinônimos (exceto o que deu match)
+				result := []string{group.Root}
+				for _, s := range group.Synonyms {
+					if strings.ToLower(s) != normalized {
 						result = append(result, s)
 					}
 				}

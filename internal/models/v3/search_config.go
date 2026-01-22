@@ -20,6 +20,10 @@ type SearchConfig struct {
 	RecencyDecay           float64 // taxa de decaimento
 	RecencyGracePeriodDays int     // dias sem penalidade
 
+	// Title Match Boost
+	TitleExactMatchBoost   float64 // boost quando query = título (default 1.3)
+	TitlePartialMatchBoost float64 // boost quando query está no título (default 1.15)
+
 	// Query Expansion
 	EnableExpansion bool // expandir query
 	MaxExpansions   int  // máximo de termos expandidos
@@ -78,6 +82,8 @@ func DefaultHumanConfig() *SearchConfig {
 		RecencyBoost:           defaults.EnableRecencyBoost,
 		RecencyDecay:           defaults.RecencyDecayRate,
 		RecencyGracePeriodDays: defaults.RecencyGracePeriodDays,
+		TitleExactMatchBoost:   1.3,
+		TitlePartialMatchBoost: 1.15,
 		EnableExpansion:        defaults.EnableQueryExpansion,
 		MaxExpansions:          defaults.MaxQueryExpansionTerms,
 		MinScore:               0.0,
@@ -98,6 +104,8 @@ func DefaultAgentConfig() *SearchConfig {
 		RecencyBoost:           false,
 		RecencyDecay:           0.0,
 		RecencyGracePeriodDays: defaults.RecencyGracePeriodDays,
+		TitleExactMatchBoost:   1.3,
+		TitlePartialMatchBoost: 1.15,
 		EnableExpansion:        false,
 		MaxExpansions:          0,
 		MinScore:               0.0,

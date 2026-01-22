@@ -3,6 +3,7 @@ package ranking
 import (
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/models/v3"
@@ -83,6 +84,11 @@ func (s *Scorer) PrepareNormalization(hits []Hit) {
 
 // Calculate calcula scores para um hit
 func (s *Scorer) Calculate(hit Hit, searchType v3.SearchType) *ScoreResult {
+	return s.CalculateWithQuery(hit, searchType, "")
+}
+
+// CalculateWithQuery calcula scores para um hit, aplicando boost de título se query fornecida
+func (s *Scorer) CalculateWithQuery(hit Hit, searchType v3.SearchType, query string) *ScoreResult {
 	result := &ScoreResult{}
 
 	// Text score (log normalization)
@@ -127,6 +133,12 @@ func (s *Scorer) Calculate(hit Hit, searchType v3.SearchType) *ScoreResult {
 		}
 	}
 
+	// Aplica boost de título se query fornecida
+	if query != "" {
+		titleBoost := s.calculateTitleBoost(hit.Document, query)
+		result.HybridScore *= titleBoost
+	}
+
 	// Recency score
 	if s.config.RecencyBoost {
 		result.RecencyScore = s.calculateRecency(hit.Document)
@@ -141,6 +153,47 @@ func (s *Scorer) Calculate(hit Hit, searchType v3.SearchType) *ScoreResult {
 	result.FinalScore = result.HybridScore * result.RecencyScore * result.PopularityScore
 
 	return result
+}
+
+// calculateTitleBoost calcula boost baseado em match exato ou parcial no título
+func (s *Scorer) calculateTitleBoost(doc map[string]interface{}, query string) float64 {
+	// Extrai título do documento
+	title := ""
+	if v, ok := doc["nome_servico"].(string); ok {
+		title = v
+	} else if v, ok := doc["title"].(string); ok {
+		title = v
+	}
+
+	if title == "" {
+		return 1.0
+	}
+
+	// Normaliza para comparação case-insensitive
+	titleNorm := strings.ToLower(strings.TrimSpace(title))
+	queryNorm := strings.ToLower(strings.TrimSpace(query))
+
+	if queryNorm == "" {
+		return 1.0
+	}
+
+	// Match exato (query == título)
+	if titleNorm == queryNorm {
+		if s.config.TitleExactMatchBoost > 0 {
+			return s.config.TitleExactMatchBoost
+		}
+		return 1.3 // default
+	}
+
+	// Match parcial (query contida no título)
+	if strings.Contains(titleNorm, queryNorm) {
+		if s.config.TitlePartialMatchBoost > 0 {
+			return s.config.TitlePartialMatchBoost
+		}
+		return 1.15 // default
+	}
+
+	return 1.0
 }
 
 // calculatePopularity calcula fator de popularidade (1.0 - 1.1)
@@ -180,14 +233,26 @@ func (s *Scorer) RankDocuments(docs []v3.Document) {
 }
 
 // FilterByThreshold filtra documentos abaixo do threshold
-func (s *Scorer) FilterByThreshold(docs []v3.Document, threshold float64) []v3.Document {
+// Usa o score apropriado baseado no tipo de busca (não o FinalScore que inclui multipliers)
+func (s *Scorer) FilterByThreshold(docs []v3.Document, threshold float64, searchType v3.SearchType) []v3.Document {
 	if threshold <= 0 {
 		return docs
 	}
 
 	filtered := make([]v3.Document, 0, len(docs))
 	for _, doc := range docs {
-		if doc.Score.Final >= threshold {
+		var scoreToCompare float64
+		switch searchType {
+		case v3.SearchTypeKeyword:
+			scoreToCompare = doc.Score.Text
+		case v3.SearchTypeSemantic:
+			scoreToCompare = doc.Score.Vector
+		case v3.SearchTypeHybrid, v3.SearchTypeAI:
+			scoreToCompare = doc.Score.Hybrid
+		default:
+			scoreToCompare = doc.Score.Hybrid
+		}
+		if scoreToCompare >= threshold {
 			filtered = append(filtered, doc)
 		}
 	}

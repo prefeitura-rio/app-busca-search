@@ -44,6 +44,7 @@ type ScoreInfo struct {
 	Final      float64 `json:"final"`
 	Text       float64 `json:"text,omitempty"`
 	Vector     float64 `json:"vector,omitempty"`
+	Hybrid     float64 `json:"hybrid,omitempty"`
 	Recency    float64 `json:"recency,omitempty"`
 	Popularity float64 `json:"popularity,omitempty"`
 }

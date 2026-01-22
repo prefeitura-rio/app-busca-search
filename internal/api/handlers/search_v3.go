@@ -109,13 +109,20 @@ func (h *SearchHandlerV3) Search(c *gin.Context) {
 func (h *SearchHandlerV3) GetDocument(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID é obrigatório"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID e obrigatorio"})
 		return
 	}
 
-	// Por enquanto, retorna não implementado
-	// TODO: implementar busca por ID
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "Endpoint em desenvolvimento"})
+	// Collection hint opcional para otimizar a busca
+	collection := c.Query("collection")
+
+	doc, err := h.engine.GetDocument(c.Request.Context(), id, collection)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Documento nao encontrado"})
+		return
+	}
+
+	c.JSON(http.StatusOK, doc)
 }
 
 func parseCollections(s string) []string {

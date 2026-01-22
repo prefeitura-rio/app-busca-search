@@ -88,28 +88,50 @@ func (e *Expander) ExpandSimple(parsed *ParsedQuery) *ExpandedQuery {
 	// Mapa para evitar duplicatas
 	seen := make(map[string]bool)
 	expanded := make([]string, 0)
-
-	// Adiciona tokens originais
-	for _, token := range parsed.Tokens {
-		if !seen[token] {
-			seen[token] = true
-			expanded = append(expanded, token)
-		}
-	}
-
-	// Expande com sinônimos locais
 	expansionsAdded := 0
-	for _, token := range parsed.Tokens {
-		if expansionsAdded >= e.maxExpansions {
-			break
-		}
 
-		syns := synonyms.FindSynonyms(token)
-		for _, syn := range syns {
+	// FASE 1: Tenta expansão por frase completa primeiro
+	// Isso permite "imposto predial" -> "iptu" e vice-versa
+	phraseSyns := synonyms.FindSynonymsByPhrase(parsed.Normalized)
+	if len(phraseSyns) > 0 {
+		// Adiciona tokens originais
+		for _, token := range parsed.Tokens {
+			if !seen[token] {
+				seen[token] = true
+				expanded = append(expanded, token)
+			}
+		}
+		// Adiciona sinônimos da frase
+		for _, syn := range phraseSyns {
 			if !seen[syn] && expansionsAdded < e.maxExpansions {
 				seen[syn] = true
 				expanded = append(expanded, syn)
 				expansionsAdded++
+			}
+		}
+	} else {
+		// FASE 2: Expansão token por token (comportamento original)
+		// Adiciona tokens originais
+		for _, token := range parsed.Tokens {
+			if !seen[token] {
+				seen[token] = true
+				expanded = append(expanded, token)
+			}
+		}
+
+		// Expande com sinônimos locais por token
+		for _, token := range parsed.Tokens {
+			if expansionsAdded >= e.maxExpansions {
+				break
+			}
+
+			syns := synonyms.FindSynonyms(token)
+			for _, syn := range syns {
+				if !seen[syn] && expansionsAdded < e.maxExpansions {
+					seen[syn] = true
+					expanded = append(expanded, syn)
+					expansionsAdded++
+				}
 			}
 		}
 	}

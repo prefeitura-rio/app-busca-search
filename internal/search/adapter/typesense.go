@@ -16,7 +16,7 @@ import (
 	"github.com/typesense/typesense-go/v3/typesense/api"
 )
 
-// TypesenseAdapter encapsula operações com Typesense
+// TypesenseAdapter encapsula operacoes com Typesense
 type TypesenseAdapter struct {
 	client     *typesense.Client
 	httpClient *http.Client
@@ -87,7 +87,7 @@ func (t *TypesenseAdapter) KeywordSearch(
 	return t.transformResult(result), nil
 }
 
-// HybridSearch executa busca híbrida (texto + vetor)
+// HybridSearch executa busca hibrida (texto + vetor)
 func (t *TypesenseAdapter) HybridSearch(
 	ctx context.Context,
 	collection string,
@@ -114,13 +114,15 @@ func (t *TypesenseAdapter) HybridSearch(
 
 	// Monta body para multi_search
 	searchBody := map[string]interface{}{
-		"collection":       collection,
-		"q":                query,
-		"query_by":         queryBy,
-		"query_by_weights": queryByWeights,
-		"vector_query":     vectorQuery,
-		"per_page":         perPage,
-		"page":             page,
+		"collection":                collection,
+		"q":                         query,
+		"query_by":                  queryBy,
+		"query_by_weights":          queryByWeights,
+		"vector_query":              vectorQuery,
+		"per_page":                  perPage,
+		"page":                      page,
+		"prioritize_exact_match":    true,
+		"prioritize_token_position": true,
 	}
 
 	// Aplica filtros
@@ -174,7 +176,7 @@ func (t *TypesenseAdapter) SemanticSearch(
 	return t.executeMultiSearch(ctx, multiSearchBody)
 }
 
-// MultiCollectionSearch executa busca em múltiplas collections
+// MultiCollectionSearch executa busca em multiplas collections
 func (t *TypesenseAdapter) MultiCollectionSearch(
 	ctx context.Context,
 	collections []string,
@@ -194,7 +196,7 @@ func (t *TypesenseAdapter) MultiCollectionSearch(
 	}
 	queryByWeights := strings.Join(weights, ",")
 
-	// Formata embedding se disponível
+	// Formata embedding se disponivel
 	var vectorQuery string
 	if len(embedding) > 0 && (searchType == v3.SearchTypeSemantic || searchType == v3.SearchTypeHybrid || searchType == v3.SearchTypeAI) {
 		embeddingStr := make([]string, len(embedding))
@@ -223,6 +225,9 @@ func (t *TypesenseAdapter) MultiCollectionSearch(
 			search["q"] = query
 			search["query_by"] = queryBy
 			search["query_by_weights"] = queryByWeights
+			// Prioriza matches exatos no titulo e posicao dos tokens
+			search["prioritize_exact_match"] = true
+			search["prioritize_token_position"] = true
 		}
 
 		if vectorQuery != "" {
@@ -383,3 +388,16 @@ func (t *TypesenseAdapter) buildFilterBy(filters map[string]interface{}) string 
 
 func strPtr(s string) *string { return &s }
 func boolPtr(b bool) *bool    { return &b }
+
+// GetDocument busca um documento por ID em uma collection especifica
+func (t *TypesenseAdapter) GetDocument(ctx context.Context, collection, id string) (map[string]interface{}, error) {
+	result, err := t.client.Collection(collection).Document(id).Retrieve(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("documento nao encontrado: %w", err)
+	}
+
+	// Remove embedding do resultado para nao expor dados sensiveis
+	delete(result, "embedding")
+
+	return result, nil
+}

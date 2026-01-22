@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	v3 "github.com/prefeitura-rio/app-busca-search/internal/models/v3"
@@ -89,29 +90,6 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 		return nil, ErrNoCollections
 	}
 
-	// 0. Análise AI (para busca AI)
-	var aiAnalysis *v3.AIAnalysis
-	if req.Type == v3.SearchTypeAI && e.analyzer != nil {
-		analysis, _ := e.analyzer.Analyze(ctx, req.Query)
-		if analysis != nil {
-			aiAnalysis = &v3.AIAnalysis{
-				Intent:         analysis.Intent,
-				Keywords:       analysis.Keywords,
-				Categories:     analysis.Categories,
-				RefinedQueries: analysis.RefinedQueries,
-				SearchStrategy: analysis.SearchStrategy,
-				Confidence:     analysis.Confidence,
-			}
-			// Usa categorias inferidas como filtro se não especificada
-			if req.Category == "" && len(analysis.Categories) > 0 {
-				// Usa a primeira categoria inferida com alta confiança
-				if analysis.Confidence >= 0.7 {
-					req.Category = analysis.Categories[0]
-				}
-			}
-		}
-	}
-
 	// 1. Parse da query
 	parseStart := time.Now()
 	parsed := e.parser.Parse(req.Query)
@@ -122,36 +100,86 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 	if config.EnableExpansion {
 		expanded = e.expander.ExpandSimple(parsed)
 	} else {
+		// Usa tokens (sem stopwords) para QueryString, não Normalized
+		queryStr := strings.Join(parsed.Tokens, " ")
+		if queryStr == "" {
+			queryStr = "*"
+		}
 		expanded = &query.ExpandedQuery{
 			Original:      parsed.Original,
 			Normalized:    parsed.Normalized,
 			Tokens:        parsed.Tokens,
 			ExpandedTerms: parsed.Tokens,
-			QueryString:   parsed.Normalized,
+			QueryString:   queryStr,
 		}
 	}
 
-	// 3. Gera embedding (se necessário)
+	// 3. Gera embedding e analisa query (em paralelo para AI search)
 	var embedding []float32
 	var embeddingErr error
-	if req.Type == v3.SearchTypeSemantic || req.Type == v3.SearchTypeHybrid || req.Type == v3.SearchTypeAI {
-		if e.gemini == nil || !e.gemini.IsAvailable() {
-			if req.Type == v3.SearchTypeSemantic {
-				return nil, ErrEmbeddingService
-			}
-			// Fallback para keyword em hybrid/AI
-			req.Type = v3.SearchTypeKeyword
-		} else {
-			embedStart := time.Now()
-			embedding, embeddingErr = e.gemini.GenerateEmbedding(ctx, expanded.QueryString)
-			timing.EmbeddingMs = float64(time.Since(embedStart).Microseconds()) / 1000
-			
-			if embeddingErr != nil {
-				if req.Type == v3.SearchTypeSemantic {
-					return nil, fmt.Errorf("%w: %v", ErrEmbeddingService, embeddingErr)
+	var aiAnalysis *v3.AIAnalysis
+
+	needsEmbedding := req.Type == v3.SearchTypeSemantic || req.Type == v3.SearchTypeHybrid || req.Type == v3.SearchTypeAI
+	needsAnalysis := req.Type == v3.SearchTypeAI && e.analyzer != nil
+
+	// Verifica disponibilidade do Gemini
+	if needsEmbedding && (e.gemini == nil || !e.gemini.IsAvailable()) {
+		if req.Type == v3.SearchTypeSemantic {
+			return nil, ErrEmbeddingService
+		}
+		// Fallback para keyword em hybrid/AI
+		req.Type = v3.SearchTypeKeyword
+		needsEmbedding = false
+		needsAnalysis = false
+	}
+
+	// Executa embedding e análise em paralelo (otimiza AI search)
+	if needsEmbedding || needsAnalysis {
+		var wg sync.WaitGroup
+		embedStart := time.Now()
+
+		if needsEmbedding {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				embedding, embeddingErr = e.gemini.GenerateEmbedding(ctx, expanded.QueryString)
+			}()
+		}
+
+		if needsAnalysis {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				analysis, _ := e.analyzer.Analyze(ctx, req.Query)
+				if analysis != nil {
+					aiAnalysis = &v3.AIAnalysis{
+						Intent:         analysis.Intent,
+						Keywords:       analysis.Keywords,
+						Categories:     analysis.Categories,
+						RefinedQueries: analysis.RefinedQueries,
+						SearchStrategy: analysis.SearchStrategy,
+						Confidence:     analysis.Confidence,
+					}
 				}
-				// Fallback para keyword
-				req.Type = v3.SearchTypeKeyword
+			}()
+		}
+
+		wg.Wait()
+		timing.EmbeddingMs = float64(time.Since(embedStart).Microseconds()) / 1000
+
+		// Trata erro de embedding
+		if embeddingErr != nil {
+			if req.Type == v3.SearchTypeSemantic {
+				return nil, fmt.Errorf("%w: %v", ErrEmbeddingService, embeddingErr)
+			}
+			// Fallback para keyword
+			req.Type = v3.SearchTypeKeyword
+		}
+
+		// Usa categorias inferidas como filtro se não especificada
+		if aiAnalysis != nil && req.Category == "" && len(aiAnalysis.Categories) > 0 {
+			if aiAnalysis.Confidence >= 0.7 {
+				req.Category = aiAnalysis.Categories[0]
 			}
 		}
 	}
@@ -221,9 +249,9 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 		scorer := ranking.NewScorerWithPopularity(config, e.popularity)
 		scorer.PrepareNormalization(result.Hits)
 
-		// Transforma hits em documentos
+		// Transforma hits em documentos (usa query para boost de título)
 		for _, hit := range result.Hits {
-			score := scorer.Calculate(hit, req.Type)
+			score := scorer.CalculateWithQuery(hit, req.Type, expanded.QueryString)
 			
 			doc := e.transformDocument(hit, collName, collConfig, score)
 			allDocs = append(allDocs, doc)
@@ -234,9 +262,9 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 	scorer := ranking.NewScorerWithPopularity(config, e.popularity)
 	scorer.RankDocuments(allDocs)
 
-	// 7. Aplica threshold
+	// 7. Aplica threshold (usa o score apropriado por tipo de busca)
 	if config.MinScore > 0 {
-		allDocs = scorer.FilterByThreshold(allDocs, config.MinScore)
+		allDocs = scorer.FilterByThreshold(allDocs, config.MinScore, req.Type)
 	}
 
 	// 8. Re-rank com LLM (apenas para AI search, topN=5 para melhor performance)
@@ -316,6 +344,7 @@ func (e *Engine) transformDocument(
 			Final:      score.FinalScore,
 			Text:       score.TextScore,
 			Vector:     score.VectorScore,
+			Hybrid:     score.HybridScore,
 			Recency:    score.RecencyScore,
 			Popularity: score.PopularityScore,
 		},
@@ -352,7 +381,88 @@ func (e *Engine) transformDocument(
 	return doc
 }
 
-// LoadSynonyms carrega sinônimos padrão
+// GetDocument busca um documento por ID, tentando nas collections configuradas
+func (e *Engine) GetDocument(ctx context.Context, id string, collectionHint string) (*v3.Document, error) {
+	// Tenta na collection hint primeiro
+	if collectionHint != "" {
+		if doc, err := e.tryGetDocument(ctx, collectionHint, id); err == nil {
+			return doc, nil
+		}
+	}
+
+	// Tenta na collection default
+	if e.defaultCollection != "" && e.defaultCollection != collectionHint {
+		if doc, err := e.tryGetDocument(ctx, e.defaultCollection, id); err == nil {
+			return doc, nil
+		}
+	}
+
+	// Tenta em todas as collections configuradas
+	for collName := range e.collectionConfigs {
+		if collName == collectionHint || collName == e.defaultCollection {
+			continue
+		}
+		if doc, err := e.tryGetDocument(ctx, collName, id); err == nil {
+			return doc, nil
+		}
+	}
+
+	return nil, fmt.Errorf("documento nao encontrado em nenhuma collection")
+}
+
+// tryGetDocument tenta buscar documento em uma collection especifica
+func (e *Engine) tryGetDocument(ctx context.Context, collection, id string) (*v3.Document, error) {
+	raw, err := e.typesense.GetDocument(ctx, collection, id)
+	if err != nil {
+		return nil, err
+	}
+
+	collConfig := e.collectionConfigs[collection]
+	return e.transformRawDocument(raw, collection, collConfig), nil
+}
+
+// transformRawDocument converte um documento raw para v3.Document
+func (e *Engine) transformRawDocument(raw map[string]interface{}, collection string, config *v3.CollectionConfig) *v3.Document {
+	doc := &v3.Document{
+		ID:         getString(raw, "id"),
+		Collection: collection,
+		Type:       "service",
+		Data:       raw,
+		Score:      v3.ScoreInfo{}, // Documento direto, sem score
+	}
+
+	if config != nil {
+		doc.Type = config.Type
+		doc.Title = getString(raw, config.TitleField)
+		doc.Description = getString(raw, config.DescField)
+		if config.CategoryField != "" {
+			doc.Category = getString(raw, config.CategoryField)
+		}
+		if config.SlugField != "" {
+			doc.Slug = getString(raw, config.SlugField)
+		}
+	} else {
+		// Fallback para campos padrao
+		doc.Title = getString(raw, "nome_servico")
+		if doc.Title == "" {
+			doc.Title = getString(raw, "title")
+		}
+		doc.Description = getString(raw, "resumo")
+		if doc.Description == "" {
+			doc.Description = getString(raw, "description")
+		}
+		doc.Category = getString(raw, "tema_geral")
+		doc.Slug = getString(raw, "slug")
+	}
+
+	// Remove campos sensiveis do Data
+	delete(doc.Data, "embedding")
+	delete(doc.Data, "search_content")
+
+	return doc
+}
+
+// LoadSynonyms carrega sinonimos padrao
 func (e *Engine) LoadSynonyms(ctx context.Context) error {
 	if e.synonymService == nil {
 		return nil
