@@ -91,8 +91,8 @@ func (a *Analyzer) Analyze(ctx context.Context, query string) (*QueryAnalysis, e
 		return cached, nil
 	}
 
-	// Timeout reduzido para não bloquear a busca
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// Timeout para análise LLM
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	prompt := fmt.Sprintf(`Analise esta query de busca de serviços públicos da Prefeitura do Rio de Janeiro:

@@ -67,6 +67,42 @@ var DefaultSynonyms = []SynonymGroup{
 	// Urbanismo
 	{Root: "obra", Synonyms: []string{"construção", "reforma", "edificação"}},
 	{Root: "habite-se", Synonyms: []string{"auto de conclusão", "habite se", "habitese"}},
+
+	// Veículos
+	{Root: "carro", Synonyms: []string{"veículo", "automóvel", "auto", "viatura"}},
+	{Root: "moto", Synonyms: []string{"motocicleta", "motoca", "motinho"}},
+	{Root: "licenciamento", Synonyms: []string{"licença veicular", "documento do carro", "crlv", "licença do veículo"}},
+
+	// Meio ambiente
+	{Root: "árvore", Synonyms: []string{"poda", "corte de árvore", "arborização", "vegetação"}},
+	{Root: "lixo", Synonyms: []string{"coleta", "resíduos", "entulho", "descarte"}},
+	{Root: "animal", Synonyms: []string{"pet", "cachorro", "gato", "bicho", "fauna"}},
+
+	// Assistência social
+	{Root: "benefício", Synonyms: []string{"auxílio", "ajuda", "assistência", "bolsa"}},
+	{Root: "cadastro único", Synonyms: []string{"cadunico", "cadúnico", "cad único", "cadastro social"}},
+	{Root: "cras", Synonyms: []string{"centro de referência", "assistência social", "serviço social"}},
+
+	// Segurança
+	{Root: "ocorrência", Synonyms: []string{"bo", "boletim de ocorrência", "registro policial", "queixa"}},
+	{Root: "delegacia", Synonyms: []string{"dp", "distrito policial", "polícia"}},
+
+	// Trabalhador
+	{Root: "emprego", Synonyms: []string{"trabalho", "vaga de emprego", "oportunidade", "colocação"}},
+	{Root: "ctps", Synonyms: []string{"carteira de trabalho", "carteira profissional"}},
+	{Root: "mei", Synonyms: []string{"microempreendedor", "micro empreendedor individual", "cnpj mei"}},
+
+	// Eventos e cultura
+	{Root: "evento", Synonyms: []string{"show", "festa", "apresentação", "espetáculo"}},
+	{Root: "museu", Synonyms: []string{"exposição", "galeria", "centro cultural"}},
+
+	// Reclamações
+	{Root: "reclamação", Synonyms: []string{"denúncia", "ouvidoria", "queixa", "reclamar"}},
+	{Root: "problema", Synonyms: []string{"defeito", "falha", "irregularidade", "erro"}},
+
+	// Parcelamento
+	{Root: "parcelamento", Synonyms: []string{"parcelar", "dividir", "parcelas", "refinanciamento"}},
+	{Root: "dívida", Synonyms: []string{"débito", "pendência", "inadimplência", "devendo"}},
 }
 
 // GetAllSynonyms retorna todos os sinônimos como mapa

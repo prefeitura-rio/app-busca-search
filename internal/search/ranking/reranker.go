@@ -66,7 +66,7 @@ func (r *Reranker) Rerank(ctx context.Context, query string, docs []v3.Document,
 		services[i] = fmt.Sprintf("%d. [%s] %s: %s", i+1, doc.ID, doc.Title, desc)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	prompt := fmt.Sprintf(`Reordene estes serviços por relevância para a query do usuário.
