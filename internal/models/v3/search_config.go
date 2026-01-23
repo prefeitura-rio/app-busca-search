@@ -49,7 +49,7 @@ type SearchConfigDefaults struct {
 
 // defaults armazena os valores configurados via ambiente
 var defaults = SearchConfigDefaults{
-	Alpha:                  0.3,
+	Alpha:                  0.5, // Balanceado: 50% texto, 50% vetor
 	TyposHuman:             2,
 	TyposAgent:             1,
 	EnableQueryExpansion:   true,
