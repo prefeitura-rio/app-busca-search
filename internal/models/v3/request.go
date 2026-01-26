@@ -3,47 +3,59 @@ package v3
 import "strings"
 
 // SearchRequest representa uma requisição de busca v3
+// @Description Parâmetros de requisição para busca unificada v3.
 type SearchRequest struct {
-	// Obrigatórios
-	Query string     `form:"q" binding:"required"`
-	Type  SearchType `form:"type" binding:"required"`
+	// Query de busca (obrigatório). Termos a serem pesquisados.
+	Query string `form:"q" binding:"required" example:"certidão de nascimento"`
+	// Tipo de busca: keyword, semantic, hybrid, ai (obrigatório)
+	Type SearchType `form:"type" binding:"required" example:"hybrid" enums:"keyword,semantic,hybrid,ai"`
 
-	// Paginação
-	Page    int `form:"page"`
-	PerPage int `form:"per_page"`
+	// Página de resultados (default: 1, mínimo: 1)
+	Page int `form:"page" example:"1" minimum:"1"`
+	// Resultados por página (default: 10, máximo: 100)
+	PerPage int `form:"per_page" example:"10" minimum:"1" maximum:"100"`
 
-	// Collections
-	Collections string `form:"collections"` // comma-separated
+	// Collections para buscar (comma-separated). Se vazio, busca em todas.
+	Collections string `form:"collections" example:"prefrio_services_base,1746"`
 
-	// Modo (human ou agent)
-	Mode SearchMode `form:"mode"`
+	// Modo de resposta: human (completo) ou agent (compacto para chatbots)
+	Mode SearchMode `form:"mode" example:"human" enums:"human,agent"`
 
-	// Configuração híbrida
-	Alpha float64 `form:"alpha"` // peso texto vs vetor (0-1)
+	// Peso do score textual (0-1). Alpha=1 é 100% texto, Alpha=0 é 100% vetor. Default: 0.5
+	Alpha float64 `form:"alpha" example:"0.5" minimum:"0" maximum:"1"`
 
-	// Thresholds
-	Threshold float64 `form:"threshold"` // score mínimo
+	// Score mínimo para incluir resultado (0-1). Resultados abaixo são filtrados.
+	Threshold float64 `form:"threshold" example:"0.3" minimum:"0" maximum:"1"`
 
-	// Features
-	Expand  *bool `form:"expand"`  // expandir query
-	Recency *bool `form:"recency"` // boost por recência
-	Typos   *int  `form:"typos"`   // tolerância a typos (0-2)
+	// Expandir query com sinônimos. Default: true (human), false (agent)
+	Expand *bool `form:"expand" example:"true"`
+	// Aplicar boost de recência. Default: true (human), false (agent)
+	Recency *bool `form:"recency" example:"true"`
+	// Tolerância a typos: 0=exato, 1=pouco, 2=muito. Default: 2 (human), 1 (agent)
+	Typos *int `form:"typos" example:"2" minimum:"0" maximum:"2"`
 
-	// Filtros
-	Status      *int   `form:"status"`       // filtrar por status
-	Category    string `form:"category"`     // filtrar por categoria
-	SubCategory string `form:"sub_category"` // filtrar por subcategoria
-	OrgaoGestor string `form:"orgao"`        // filtrar por órgão gestor
-	TempoMax    string `form:"tempo_max"`    // filtrar por tempo máximo (imediato, 1_dia, etc)
-	IsFree      *bool  `form:"is_free"`      // filtrar por gratuidade
-	HasDigital  *bool  `form:"digital"`      // filtrar por canal digital disponível
+	// Filtrar por status: 0=Rascunho, 1=Publicado
+	Status *int `form:"status" example:"1" enums:"0,1"`
+	// Filtrar por categoria (tema_geral)
+	Category string `form:"category" example:"documentos"`
+	// Filtrar por subcategoria
+	SubCategory string `form:"sub_category" example:"certidoes"`
+	// Filtrar por órgão gestor
+	OrgaoGestor string `form:"orgao" example:"SMDC"`
+	// Filtrar por tempo máximo: imediato, 1_dia, 2_a_5_dias, etc
+	TempoMax string `form:"tempo_max" example:"imediato" enums:"imediato,1_dia,2_a_5_dias,6_a_10_dias,11_a_15_dias,16_a_30_dias,mais_de_30_dias"`
+	// Filtrar apenas serviços gratuitos
+	IsFree *bool `form:"is_free" example:"true"`
+	// Filtrar serviços com canal digital disponível
+	HasDigital *bool `form:"digital" example:"true"`
 
-	// Campos a retornar (comma-separated)
-	Fields string `form:"fields"`
+	// Campos a retornar (comma-separated). Reduz payload da resposta.
+	// Valores: id,collection,type,title,description,category,slug,url,score,data,buttons
+	Fields string `form:"fields" example:"title,description,score,buttons"`
 
-	// Interno (preenchido pelo handler)
-	ParsedCollections []string `form:"-" json:"-"`
-	ParsedFields      []string `form:"-" json:"-"`
+	// Interno (preenchido pelo handler, não exposto na API)
+	ParsedCollections []string `form:"-" json:"-" swaggerignore:"true"`
+	ParsedFields      []string `form:"-" json:"-" swaggerignore:"true"`
 }
 
 // Validate valida e aplica defaults à requisição
