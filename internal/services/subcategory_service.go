@@ -38,7 +38,7 @@ func (scs *SubcategoryService) GetSubcategories(ctx context.Context, req *models
 	}
 
 	// 1. Buscar subcategorias via facet search filtradas por categoria
-	subcategories, err := scs.fetchSubcategoriesWithFacets(ctx, req.Category, req.IncludeInactive)
+	subcategories, err := scs.fetchSubcategoriesWithFacets(ctx, req.Category)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar subcategorias: %w", err)
 	}
@@ -82,23 +82,7 @@ func (scs *SubcategoryService) GetServicesBySubcategory(ctx context.Context, req
 		req.PerPage = 10
 	}
 
-	// Construir filtro dinamicamente baseado em category e includeInactive
-	var filterBy string
-	if req.Category != "" {
-		// Filtrar por categoria E subcategoria (desambiguação)
-		if req.IncludeInactive {
-			filterBy = fmt.Sprintf("tema_geral:=`%s` && sub_categoria:=`%s`", req.Category, req.Subcategory)
-		} else {
-			filterBy = fmt.Sprintf("tema_geral:=`%s` && sub_categoria:=`%s` && status:=1", req.Category, req.Subcategory)
-		}
-	} else {
-		// Apenas filtrar por subcategoria
-		if req.IncludeInactive {
-			filterBy = fmt.Sprintf("sub_categoria:=`%s`", req.Subcategory)
-		} else {
-			filterBy = fmt.Sprintf("sub_categoria:=`%s` && status:=1", req.Subcategory)
-		}
-	}
+	filterBy := subcategoryServicesFilterBy(req.Category, req.Subcategory)
 
 	searchParams := &api.SearchCollectionParams{
 		Q:        pointer.String("*"),
@@ -142,17 +126,23 @@ func (scs *SubcategoryService) GetServicesBySubcategory(ctx context.Context, req
 	return response, nil
 }
 
-// fetchSubcategoriesWithFacets busca subcategorias usando facet search do Typesense
-func (scs *SubcategoryService) fetchSubcategoriesWithFacets(ctx context.Context, category string, includeInactive bool) ([]*models.Subcategory, error) {
-	// Construir filtro: categoria específica + opcionalmente status
-	var filterBy string
-	if includeInactive {
-		// Apenas filtrar por categoria
-		filterBy = fmt.Sprintf("tema_geral:=`%s`", category)
-	} else {
-		// Filtrar por categoria E status publicado
-		filterBy = fmt.Sprintf("tema_geral:=`%s` && status:=1", category)
+// subcategoriesFilterBy monta o filter_by da contagem pública de subcategorias de uma categoria.
+func subcategoriesFilterBy(category string) string {
+	return fmt.Sprintf("tema_geral:=`%s` && %s", filterValue(category), publishedOnlyFilter)
+}
+
+// subcategoryServicesFilterBy monta o filter_by da listagem pública de serviços de uma
+// subcategoria; category (opcional) desambigua subcategorias com o mesmo nome.
+func subcategoryServicesFilterBy(category, subcategory string) string {
+	if category != "" {
+		return fmt.Sprintf("tema_geral:=`%s` && sub_categoria:=`%s` && %s", filterValue(category), filterValue(subcategory), publishedOnlyFilter)
 	}
+	return fmt.Sprintf("sub_categoria:=`%s` && %s", filterValue(subcategory), publishedOnlyFilter)
+}
+
+// fetchSubcategoriesWithFacets busca subcategorias usando facet search do Typesense
+func (scs *SubcategoryService) fetchSubcategoriesWithFacets(ctx context.Context, category string) ([]*models.Subcategory, error) {
+	filterBy := subcategoriesFilterBy(category)
 
 	// Query com facet em sub_categoria
 	searchParams := &api.SearchCollectionParams{

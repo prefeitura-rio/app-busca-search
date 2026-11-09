@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
@@ -44,7 +45,7 @@ func (cs *CategoryService) GetCategories(ctx context.Context, req *models.Catego
 	}
 
 	// 1. Buscar categorias via facet search
-	categories, err := cs.fetchCategoriesWithFacets(ctx, req.IncludeInactive)
+	categories, err := cs.fetchCategoriesWithFacets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar categorias: %w", err)
 	}
@@ -77,7 +78,7 @@ func (cs *CategoryService) GetCategories(ctx context.Context, req *models.Catego
 
 	// 6. Se filter_category fornecido, buscar serviços
 	if req.FilterCategory != "" {
-		services, total, err := cs.getServicesByCategory(ctx, req.FilterCategory, req.Page, req.PerPage, req.IncludeInactive)
+		services, total, err := cs.getServicesByCategory(ctx, req.FilterCategory, req.Page, req.PerPage)
 		if err != nil {
 			return nil, fmt.Errorf("erro ao buscar serviços da categoria: %w", err)
 		}
@@ -94,29 +95,38 @@ func (cs *CategoryService) GetCategories(ctx context.Context, req *models.Catego
 	return response, nil
 }
 
-// fetchCategoriesWithFacets busca categorias usando facet search do Typesense
-func (cs *CategoryService) fetchCategoriesWithFacets(ctx context.Context, includeInactive bool) ([]*models.Category, error) {
-	// Construir filtro dinamicamente baseado em includeInactive
-	var filterBy string
-	if includeInactive {
-		// Sem filtro de status - retorna todas as categorias (publicados e rascunhos)
-		filterBy = ""
-	} else {
-		// Apenas publicados (status = 1)
-		filterBy = "status:=1"
-	}
+// publishedOnlyFilter é o filtro de publicação aplicado sempre pelas rotas públicas
+// de categorias e subcategorias. Rascunhos (status != 1) só são acessíveis pelas
+// rotas /admin, protegidas por JWT.
+const publishedOnlyFilter = "status:=1"
 
-	// Query com facet em tema_geral
+// filterValue prepara um valor vindo do cliente para uso entre backticks no filter_by do
+// Typesense: remove backticks, que fechariam o literal e permitiriam injetar expressões
+// (ex.: "|| status:=0") e contornar o filtro de publicação.
+func filterValue(value string) string {
+	return strings.ReplaceAll(value, "`", "")
+}
+
+// categoriesFilterBy monta o filter_by da contagem pública de categorias.
+func categoriesFilterBy() string {
+	return publishedOnlyFilter
+}
+
+// categoryServicesFilterBy monta o filter_by da listagem pública de serviços de uma categoria.
+// Backticks são necessários para escapar caracteres especiais como parênteses.
+func categoryServicesFilterBy(category string) string {
+	return fmt.Sprintf("tema_geral:=`%s` && %s", filterValue(category), publishedOnlyFilter)
+}
+
+// fetchCategoriesWithFacets busca categorias usando facet search do Typesense
+func (cs *CategoryService) fetchCategoriesWithFacets(ctx context.Context) ([]*models.Category, error) {
+	// Query com facet em tema_geral, apenas serviços publicados
 	searchParams := &api.SearchCollectionParams{
 		Q:              pointer.String("*"),
 		FacetBy:        pointer.String("tema_geral"),
 		MaxFacetValues: pointer.Int(250),
 		PerPage:        pointer.Int(0),
-	}
-
-	// Adicionar filtro apenas se não estiver vazio
-	if filterBy != "" {
-		searchParams.FilterBy = pointer.String(filterBy)
+		FilterBy:       pointer.String(categoriesFilterBy()),
 	}
 
 	result, err := cs.client.Collection(CollectionName).Documents().Search(ctx, searchParams)
@@ -198,18 +208,9 @@ func (cs *CategoryService) extractCategoriesFromFacets(result *api.SearchResult)
 	return categories, nil
 }
 
-// getServicesByCategory busca serviços de uma categoria específica
-func (cs *CategoryService) getServicesByCategory(ctx context.Context, category string, page, perPage int, includeInactive bool) ([]*models.ServiceDocument, int, error) {
-	// Construir filtro dinamicamente baseado em includeInactive
-	// Backticks são necessários para escapar caracteres especiais como parênteses
-	var filterBy string
-	if includeInactive {
-		// Apenas filtrar por categoria, sem filtro de status
-		filterBy = fmt.Sprintf("tema_geral:=`%s`", category)
-	} else {
-		// Filtrar por categoria E status publicado
-		filterBy = fmt.Sprintf("tema_geral:=`%s` && status:=1", category)
-	}
+// getServicesByCategory busca serviços publicados de uma categoria específica
+func (cs *CategoryService) getServicesByCategory(ctx context.Context, category string, page, perPage int) ([]*models.ServiceDocument, int, error) {
+	filterBy := categoryServicesFilterBy(category)
 
 	searchParams := &api.SearchCollectionParams{
 		Q:        pointer.String("*"),

@@ -188,30 +188,7 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 	searchStart := time.Now()
 	
 	// Prepara filtros
-	filters := make(map[string]interface{})
-	if req.Status != nil {
-		filters["status"] = *req.Status
-	} else {
-		filters["status"] = 1 // Default: apenas publicados
-	}
-	if req.Category != "" {
-		filters["tema_geral"] = req.Category
-	}
-	if req.SubCategory != "" {
-		filters["subtema"] = req.SubCategory
-	}
-	if req.OrgaoGestor != "" {
-		filters["orgao_gestor"] = req.OrgaoGestor
-	}
-	if req.TempoMax != "" {
-		filters["prazo"] = req.TempoMax
-	}
-	if req.IsFree != nil {
-		filters["gratuito"] = *req.IsFree
-	}
-	if req.HasDigital != nil {
-		filters["canal_digital"] = *req.HasDigital
-	}
+	filters := buildSearchFilters(req)
 
 	// Busca em todas as collections
 	allDocs := make([]v3.Document, 0)
@@ -379,6 +356,35 @@ func (e *Engine) transformDocument(
 	delete(doc.Data, "search_content")
 
 	return doc
+}
+
+// buildSearchFilters monta os filtros da busca v3 a partir da requisição.
+func buildSearchFilters(req *v3.SearchRequest) map[string]interface{} {
+	filters := map[string]interface{}{
+		// A busca pública devolve sempre apenas serviços publicados. Rascunhos
+		// (status != 1) só são acessíveis pelas rotas /admin, protegidas por JWT.
+		"status": 1,
+	}
+	if req.Category != "" {
+		filters["tema_geral"] = req.Category
+	}
+	if req.SubCategory != "" {
+		filters["subtema"] = req.SubCategory
+	}
+	if req.OrgaoGestor != "" {
+		filters["orgao_gestor"] = req.OrgaoGestor
+	}
+	if req.TempoMax != "" {
+		filters["prazo"] = req.TempoMax
+	}
+	if req.IsFree != nil {
+		filters["gratuito"] = *req.IsFree
+	}
+	if req.HasDigital != nil {
+		filters["canal_digital"] = *req.HasDigital
+	}
+
+	return filters
 }
 
 // GetDocument busca um documento por ID, tentando nas collections configuradas

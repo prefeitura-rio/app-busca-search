@@ -72,7 +72,7 @@ func (c *SearchCache) Set(key string, response *v3.SearchResponse) {
 func (c *SearchCache) GenerateKey(req *v3.SearchRequest) string {
 	// Cria uma string com os parâmetros relevantes
 	keyData := fmt.Sprintf(
-		"%s|%s|%d|%d|%s|%s|%.2f|%.2f|%v|%v|%d|%s",
+		"%s|%s|%d|%d|%s|%s|%.2f|%.2f|%v|%v|%s",
 		req.Query,
 		req.Type,
 		req.Page,
@@ -83,7 +83,6 @@ func (c *SearchCache) GenerateKey(req *v3.SearchRequest) string {
 		req.Threshold,
 		req.Expand,
 		req.Recency,
-		safeIntPtr(req.Status),
 		req.Category,
 	)
 
@@ -136,11 +135,4 @@ func (c *SearchCache) Stats() (size int, expired int) {
 		}
 	}
 	return
-}
-
-func safeIntPtr(p *int) int {
-	if p == nil {
-		return -1
-	}
-	return *p
 }

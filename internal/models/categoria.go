@@ -31,13 +31,12 @@ type Category struct {
 
 // CategoryRequest representa requisição de categorias
 type CategoryRequest struct {
-	SortBy          string `form:"sort_by"`          // popularity, count, alpha
-	Order           string `form:"order"`            // asc, desc
-	IncludeEmpty    bool   `form:"include_empty"`    // incluir categorias sem serviços
-	IncludeInactive bool   `form:"include_inactive"` // incluir serviços inativos (status != 1)
-	FilterCategory  string `form:"filter_category"`  // filtrar serviços por categoria
-	Page            int    `form:"page"`             // página para serviços filtrados
-	PerPage         int    `form:"per_page"`         // resultados por página
+	SortBy         string `form:"sort_by"`         // popularity, count, alpha
+	Order          string `form:"order"`           // asc, desc
+	IncludeEmpty   bool   `form:"include_empty"`   // incluir categorias sem serviços
+	FilterCategory string `form:"filter_category"` // filtrar serviços por categoria
+	Page           int    `form:"page"`            // página para serviços filtrados
+	PerPage        int    `form:"per_page"`        // resultados por página
 }
 
 // FilteredCategoryResult resultado de serviços filtrados por categoria
@@ -71,11 +70,10 @@ type Subcategory struct {
 
 // SubcategoryRequest representa requisição de subcategorias
 type SubcategoryRequest struct {
-	Category        string `form:"category" binding:"required"` // categoria pai (obrigatória)
-	SortBy          string `form:"sort_by"`                     // popularity, count, alpha
-	Order           string `form:"order"`                       // asc, desc
-	IncludeEmpty    bool   `form:"include_empty"`               // incluir subcategorias sem serviços
-	IncludeInactive bool   `form:"include_inactive"`            // incluir serviços inativos (status != 1)
+	Category     string `form:"category" binding:"required"` // categoria pai (obrigatória)
+	SortBy       string `form:"sort_by"`                     // popularity, count, alpha
+	Order        string `form:"order"`                       // asc, desc
+	IncludeEmpty bool   `form:"include_empty"`               // incluir subcategorias sem serviços
 }
 
 // SubcategoryResponse resposta do endpoint de subcategorias
@@ -98,11 +96,10 @@ type FilteredSubcategoryResult struct {
 
 // SubcategoryServicesRequest representa requisição de serviços por subcategoria
 type SubcategoryServicesRequest struct {
-	Subcategory     string `form:"subcategory" binding:"required"` // subcategoria (obrigatória)
-	Category        string `form:"category"`                       // categoria pai (opcional, para desambiguar subcategorias iguais)
-	Page            int    `form:"page"`                           // página
-	PerPage         int    `form:"per_page"`                       // resultados por página
-	IncludeInactive bool   `form:"include_inactive"`               // incluir serviços inativos
+	Subcategory string `form:"subcategory" binding:"required"` // subcategoria (obrigatória)
+	Category    string `form:"category"`                       // categoria pai (opcional, para desambiguar subcategorias iguais)
+	Page        int    `form:"page"`                           // página
+	PerPage     int    `form:"per_page"`                       // resultados por página
 }
 
 // SubcategoryServicesResponse resposta de serviços por subcategoria
