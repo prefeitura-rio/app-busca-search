@@ -1984,15 +1984,6 @@
             }
           },
           {
-            "description": "Incluir serviços inativos/rascunhos (status != 1) nas contagens e filtros",
-            "name": "include_inactive",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          {
             "description": "Nome da categoria para filtrar serviços (ex: Educação, Saúde, Transporte)",
             "name": "filter_category",
             "in": "query",
@@ -2114,15 +2105,6 @@
           {
             "description": "Incluir subcategorias sem serviços publicados",
             "name": "include_empty",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          {
-            "description": "Incluir serviços inativos/rascunhos (status != 1) nas contagens",
-            "name": "include_inactive",
             "in": "query",
             "schema": {
               "type": "boolean",
@@ -2474,7 +2456,7 @@
     },
     "/api/v1/subcategories/{subcategory}/services": {
       "get": {
-        "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true\n4. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos",
+        "description": "Retorna serviços filtrados por subcategoria, com paginação. Serviços são ordenados por última atualização (mais recentes primeiro).\n\n**Casos de Uso:**\n1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services\n2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20\n3. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos",
         "tags": [
           "subcategories"
         ],
@@ -2516,15 +2498,6 @@
               "minimum": 1,
               "maximum": 100,
               "default": 10
-            }
-          },
-          {
-            "description": "Incluir serviços inativos/rascunhos (status != 1)",
-            "name": "include_inactive",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
             }
           }
         ],
@@ -2936,19 +2909,6 @@
               "type": "integer",
               "minimum": 0,
               "maximum": 2
-            }
-          },
-          {
-            "example": 1,
-            "description": "Filtrar por status do serviço. 0=Rascunho, 1=Publicado.",
-            "name": "status",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "enum": [
-                0,
-                1
-              ]
             }
           },
           {
