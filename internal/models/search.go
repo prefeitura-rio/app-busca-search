@@ -65,7 +65,6 @@ type SearchRequest struct {
 	Type                  SearchType      `form:"type" binding:"required"`
 	Page                  int             `form:"page"`
 	PerPage               int             `form:"per_page"`
-	IncludeInactive       bool            `form:"include_inactive"`
 	Alpha                 float64         `form:"alpha"` // Para hybrid (default 0.3)
 	ScoreThreshold        *ScoreThreshold `form:"score_threshold,omitempty"`
 	ExcludeAgentExclusive *bool           `form:"exclude_agent_exclusive"`

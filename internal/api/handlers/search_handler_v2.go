@@ -32,7 +32,6 @@ func NewSearchHandlerV2(searchService *services.SearchServiceV2) *SearchHandlerV
 // @Param type query string true "Tipo de busca: keyword, semantic, hybrid"
 // @Param page query int false "Número da página (mínimo: 1)" default(1)
 // @Param per_page query int false "Resultados por página (máximo: 100)" default(10)
-// @Param include_inactive query bool false "Incluir documentos inativos (aplica-se apenas a coleções com filtro de status)" default(false)
 // @Param alpha query number false "Alpha para busca hybrid (0-1). Alpha=0.3 significa 30% texto + 70% vetor." default(0.3)
 // @Param threshold_keyword query number false "Score mínimo para busca keyword (0-1, filtra text_match normalizado)"
 // @Param threshold_semantic query number false "Score mínimo para busca semantic (0-1, filtra por similaridade vetorial)"
