@@ -129,7 +129,7 @@ func (h *SearchHandler) Search(c *gin.Context) {
 
 // GetDocumentByID godoc
 // @Summary Busca um serviço por ID (UUID)
-// @Description Retorna os detalhes completos de um serviço específico através de busca direta por UUID no Typesense
+// @Description Retorna os detalhes completos de um serviço publicado através de busca direta por UUID no Typesense. Serviço não publicado (status != 1) responde 404.
 // @Tags search
 // @Accept json
 // @Produce json
@@ -157,12 +157,26 @@ func (h *SearchHandler) GetDocumentByID(c *gin.Context) {
 		return
 	}
 
+	// Rota pública: serviço não publicado responde como inexistente
+	if !isPublishedService(doc) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Serviço não encontrado",
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, doc)
+}
+
+// isPublishedService indica se o serviço está publicado (status=1). As rotas públicas de
+// detalhe só devolvem serviços publicados: rascunhos ficam restritos às rotas /admin, com JWT.
+func isPublishedService(service *models.PrefRioService) bool {
+	return service != nil && service.Status == models.ServiceStatusPublished
 }
 
 // GetServiceBySlug godoc
 // @Summary Busca um serviço por slug SEO-friendly
-// @Description Retorna os detalhes completos de um serviço através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual.
+// @Description Retorna os detalhes completos de um serviço publicado através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual. Serviço não publicado (status != 1) responde 404.
 // @Tags services
 // @Accept json
 // @Produce json
@@ -193,7 +207,7 @@ func (h *SearchHandler) GetServiceBySlug(c *gin.Context) {
 		return
 	}
 
-	if service != nil {
+	if isPublishedService(service) {
 		c.JSON(http.StatusOK, service)
 		return
 	}
@@ -208,7 +222,7 @@ func (h *SearchHandler) GetServiceBySlug(c *gin.Context) {
 		return
 	}
 
-	if service != nil {
+	if isPublishedService(service) {
 		// Encontrou no histórico - retorna 301 com redirect
 		newLocation := fmt.Sprintf("/api/v1/services/%s", service.Slug)
 		c.Header("Location", newLocation)

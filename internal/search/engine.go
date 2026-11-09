@@ -410,15 +410,39 @@ func (e *Engine) GetDocument(ctx context.Context, id string, collectionHint stri
 	return nil, fmt.Errorf("documento nao encontrado em nenhuma collection")
 }
 
-// tryGetDocument tenta buscar documento em uma collection especifica
+// tryGetDocument tenta buscar documento em uma collection especifica.
+// Rota publica: so le collections configuradas (o hint nao abre collections internas, como
+// service_versions) e so devolve documento publicado (StatusField = StatusValue).
 func (e *Engine) tryGetDocument(ctx context.Context, collection, id string) (*v3.Document, error) {
+	collConfig, ok := e.collectionConfigs[collection]
+	if !ok || collConfig == nil {
+		return nil, fmt.Errorf("collection %s nao configurada", collection)
+	}
+
 	raw, err := e.typesense.GetDocument(ctx, collection, id)
 	if err != nil {
 		return nil, err
 	}
 
-	collConfig := e.collectionConfigs[collection]
+	if !isPublishedDocument(raw, collConfig) {
+		return nil, fmt.Errorf("documento nao encontrado na collection %s", collection)
+	}
+
 	return e.transformRawDocument(raw, collection, collConfig), nil
+}
+
+// isPublishedDocument indica se o documento satisfaz o filtro de publicacao da collection
+// (StatusField = StatusValue). Collection sem StatusField nao tem
+// estado de publicacao, e todo documento dela e publico.
+func isPublishedDocument(raw map[string]interface{}, config *v3.CollectionConfig) bool {
+	if config.StatusField == "" {
+		return true
+	}
+	value, ok := raw[config.StatusField]
+	if !ok || value == nil {
+		return false
+	}
+	return fmt.Sprint(value) == config.StatusValue
 }
 
 // transformRawDocument converte um documento raw para v3.Document

@@ -127,6 +127,12 @@ type Button struct {
 	URLService string `json:"url_service"`
 }
 
+// Valores do campo status de PrefRioService
+const (
+	ServiceStatusDraft     = 0
+	ServiceStatusPublished = 1
+)
+
 // PrefRioService representa um serviço da collection prefrio_services_base
 type PrefRioService struct {
 	ID                    string                 `json:"id,omitempty" typesense:"id,optional"`
