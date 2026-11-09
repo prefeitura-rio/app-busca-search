@@ -105,8 +105,11 @@ func TestSearchConfig(t *testing.T) {
 		if config.NumTypos != 2 {
 			t.Errorf("NumTypos = %d, want 2", config.NumTypos)
 		}
-		if config.Alpha != 0.3 {
-			t.Errorf("Alpha = %f, want 0.3", config.Alpha)
+		if config.Alpha != v3.GetDefaults().Alpha {
+			t.Errorf("Alpha = %f, want default %f", config.Alpha, v3.GetDefaults().Alpha)
+		}
+		if config.Alpha != 0.5 {
+			t.Errorf("Alpha = %f, want 0.5", config.Alpha)
 		}
 		if !config.EnableExpansion {
 			t.Error("EnableExpansion should be true for human mode")
