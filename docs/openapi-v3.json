@@ -2220,15 +2220,6 @@
             }
           },
           {
-            "description": "Incluir serviços inativos (status != 1)",
-            "name": "include_inactive",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          {
             "description": "Alpha para busca hybrid (0-1). Alpha=0.3 significa 30% texto + 70% vetor.",
             "name": "alpha",
             "in": "query",
@@ -2624,15 +2615,6 @@
             "schema": {
               "type": "integer",
               "default": 10
-            }
-          },
-          {
-            "description": "Incluir documentos inativos (aplica-se apenas a coleções com filtro de status)",
-            "name": "include_inactive",
-            "in": "query",
-            "schema": {
-              "type": "boolean",
-              "default": false
             }
           },
           {
