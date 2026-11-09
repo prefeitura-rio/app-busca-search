@@ -136,6 +136,8 @@ func (h *SearchHandlerV3) Search(c *gin.Context) {
 // @Description
 // @Description Se o parâmetro `collection` for informado, a busca é mais eficiente pois vai direto na collection especificada.
 // @Description Caso contrário, o sistema busca em todas as collections disponíveis.
+// @Description
+// @Description Só devolve documento publicado (status=1 em prefrio_services_base) de collection configurada; os demais respondem 404.
 // @Tags search-v3
 // @Accept json
 // @Produce json

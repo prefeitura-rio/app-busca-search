@@ -241,7 +241,7 @@ func (ss *SearchServiceV2) GetDocumentByID(ctx context.Context, id string, colle
 	// If hint provided and valid, try it first
 	if collectionHint != "" {
 		if collConfig := ss.config.GetCollectionConfig(collectionHint); collConfig != nil {
-			doc, err := ss.tryGetFromCollection(ctx, id, collectionHint, collConfig.Type)
+			doc, err := ss.tryGetFromCollection(ctx, id, collectionHint, collConfig)
 			if err == nil {
 				return doc, nil
 			}
@@ -251,7 +251,10 @@ func (ss *SearchServiceV2) GetDocumentByID(ctx context.Context, id string, colle
 	// Search all searchable collections
 	for _, collName := range collections {
 		collConfig := ss.config.GetCollectionConfig(collName)
-		doc, err := ss.tryGetFromCollection(ctx, id, collName, collConfig.Type)
+		if collConfig == nil {
+			continue
+		}
+		doc, err := ss.tryGetFromCollection(ctx, id, collName, collConfig)
 		if err == nil {
 			return doc, nil
 		}
@@ -442,7 +445,7 @@ func (ss *SearchServiceV2) extractScoreInfo(hit *api.SearchResultHit) *models.Sc
 	return scoreInfo
 }
 
-func (ss *SearchServiceV2) tryGetFromCollection(ctx context.Context, id string, collName string, collType string) (*models.UnifiedDocument, error) {
+func (ss *SearchServiceV2) tryGetFromCollection(ctx context.Context, id string, collName string, collConfig *config.CollectionConfig) (*models.UnifiedDocument, error) {
 	result, err := ss.client.Collection(collName).Document(id).Retrieve(ctx)
 	if err != nil {
 		return nil, err
@@ -452,12 +455,31 @@ func (ss *SearchServiceV2) tryGetFromCollection(ctx context.Context, id string, 
 	var tsDoc map[string]interface{}
 	json.Unmarshal(resultBytes, &tsDoc)
 
+	// Rota pública: documento não publicado responde como inexistente
+	if !isPublishedDocument(tsDoc, collConfig) {
+		return nil, fmt.Errorf("document not found in collection %s", collName)
+	}
+
 	return &models.UnifiedDocument{
 		ID:         id,
 		Collection: collName,
-		Type:       collType,
+		Type:       collConfig.Type,
 		Data:       tsDoc,
 	}, nil
+}
+
+// isPublishedDocument indica se o documento satisfaz o filtro de publicação da collection
+// (FilterField = FilterValue), o mesmo que publishedFilter aplica na busca. Collection sem
+// filtro configurado não tem estado de publicação, e todo documento dela é público.
+func isPublishedDocument(doc map[string]interface{}, collConfig *config.CollectionConfig) bool {
+	if collConfig.FilterField == "" {
+		return true
+	}
+	value, ok := doc[collConfig.FilterField]
+	if !ok || value == nil {
+		return false
+	}
+	return fmt.Sprint(value) == collConfig.FilterValue
 }
 
 func (ss *SearchServiceV2) applyKeywordThreshold(docs []*models.UnifiedDocument, threshold float64) []*models.UnifiedDocument {

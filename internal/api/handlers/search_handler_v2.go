@@ -134,7 +134,7 @@ func (h *SearchHandlerV2) Search(c *gin.Context) {
 
 // GetDocumentByID godoc
 // @Summary Busca documento por ID em qualquer coleção configurada (v2)
-// @Description Retorna documento de qualquer coleção configurada. Se 'collection' fornecido como query param, tenta buscar nessa coleção primeiro. Caso contrário, busca em todas as coleções configuradas.
+// @Description Retorna documento de qualquer coleção configurada. Se 'collection' fornecido como query param, tenta buscar nessa coleção primeiro. Caso contrário, busca em todas as coleções configuradas. Documento não publicado (fora do filter_field/filter_value da coleção) responde 404.
 // @Tags search-v2
 // @Accept json
 // @Produce json

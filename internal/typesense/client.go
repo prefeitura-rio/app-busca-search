@@ -1450,11 +1450,18 @@ func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.Pref
 	return &service, nil
 }
 
-// GetPrefRioServiceBySlug busca um serviço pelo slug atual
+// publishedSlugFilter monta o filter_by da busca pública por slug: o slug vai entre backticks
+// (sem backticks internos, para não injetar expressões) e só serviços publicados (status=1)
+// entram no resultado, que é lido com per_page=1.
+func publishedSlugFilter(field, slug string) string {
+	return fmt.Sprintf("%s:=`%s` && status:=%d", field, strings.ReplaceAll(slug, "`", ""), models.ServiceStatusPublished)
+}
+
+// GetPrefRioServiceBySlug busca um serviço publicado pelo slug atual
 func (c *Client) GetPrefRioServiceBySlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
 
-	filterBy := fmt.Sprintf("slug:=%s", slug)
+	filterBy := publishedSlugFilter("slug", slug)
 	searchParams := &api.SearchCollectionParams{
 		Q:             stringPtr("*"),
 		FilterBy:      &filterBy,
@@ -1511,11 +1518,11 @@ func (c *Client) GetPrefRioServiceBySlug(ctx context.Context, slug string) (*mod
 	return &service, nil
 }
 
-// GetPrefRioServiceByHistoricalSlug busca um serviço que tenha o slug no histórico
+// GetPrefRioServiceByHistoricalSlug busca um serviço publicado que tenha o slug no histórico
 func (c *Client) GetPrefRioServiceByHistoricalSlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
 
-	filterBy := fmt.Sprintf("slug_history:=%s", slug)
+	filterBy := publishedSlugFilter("slug_history", slug)
 	searchParams := &api.SearchCollectionParams{
 		Q:             stringPtr("*"),
 		FilterBy:      &filterBy,
