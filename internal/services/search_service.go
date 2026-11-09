@@ -1152,21 +1152,14 @@ func calculateRecencyFactor(lastUpdateTimestamp int64) float64 {
 
 // buildFilterBy constrói a expressão de filtro baseada no SearchRequest
 func buildFilterBy(req *models.SearchRequest) string {
-	var filters []string
-
-	// Filtro de status (apenas publicados, a menos que include_inactive)
-	if !req.IncludeInactive {
-		filters = append(filters, "status:=1")
-	}
+	// Filtro de status: a busca pública devolve sempre apenas serviços publicados.
+	// Rascunhos (status != 1) só são acessíveis pelas rotas /admin, protegidas por JWT.
+	filters := []string{"status:=1"}
 
 	// Filtro exclude_agent_exclusive
 	// Se true, exclui serviços exclusivos para agentes (mostra apenas para humanos)
 	if req.ExcludeAgentExclusive != nil && *req.ExcludeAgentExclusive {
 		filters = append(filters, "agents.exclusive_for_agents:=false")
-	}
-
-	if len(filters) == 0 {
-		return ""
 	}
 
 	return strings.Join(filters, " && ")

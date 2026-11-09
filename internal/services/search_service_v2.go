@@ -288,6 +288,17 @@ func (ss *SearchServiceV2) getCollections(requestedCollections []string) ([]stri
 	return requestedCollections, nil
 }
 
+// publishedFilter devolve o filtro de publicação da collection (FilterField:=FilterValue),
+// ou nil quando a collection não tem filtro configurado. A busca pública aplica-o sempre:
+// documentos não publicados só são acessíveis pelas rotas /admin, protegidas por JWT.
+func publishedFilter(collConfig *config.CollectionConfig) *string {
+	if collConfig.FilterField == "" {
+		return nil
+	}
+	filterBy := fmt.Sprintf("%s:=%s", collConfig.FilterField, collConfig.FilterValue)
+	return &filterBy
+}
+
 func (ss *SearchServiceV2) buildKeywordSearchParams(collName string, collConfig *config.CollectionConfig, req *models.SearchRequest) api.MultiSearchCollectionParameters {
 	queryStr := req.Query
 
@@ -311,10 +322,7 @@ func (ss *SearchServiceV2) buildKeywordSearchParams(collName string, collConfig 
 		PerPage:        pointer.Int(250),
 	}
 
-	if collConfig.FilterField != "" && !req.IncludeInactive {
-		filterBy := fmt.Sprintf("%s:=%s", collConfig.FilterField, collConfig.FilterValue)
-		params.FilterBy = &filterBy
-	}
+	params.FilterBy = publishedFilter(collConfig)
 
 	return params
 }
@@ -330,11 +338,7 @@ func (ss *SearchServiceV2) buildSemanticSearchParams(collName string, collConfig
 		PerPage:     pointer.Int(250),
 	}
 
-	// Add filter if collection requires it
-	if collConfig.FilterField != "" && !req.IncludeInactive {
-		filterBy := fmt.Sprintf("%s:=%s", collConfig.FilterField, collConfig.FilterValue)
-		params.FilterBy = &filterBy
-	}
+	params.FilterBy = publishedFilter(collConfig)
 
 	return params
 }
@@ -363,10 +367,7 @@ func (ss *SearchServiceV2) buildHybridSearchParams(collName string, collConfig *
 		PerPage:        pointer.Int(250),
 	}
 
-	if collConfig.FilterField != "" && !req.IncludeInactive {
-		filterBy := fmt.Sprintf("%s:=%s", collConfig.FilterField, collConfig.FilterValue)
-		params.FilterBy = &filterBy
-	}
+	params.FilterBy = publishedFilter(collConfig)
 
 	return params
 }
