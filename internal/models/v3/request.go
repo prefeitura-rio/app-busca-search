@@ -34,8 +34,6 @@ type SearchRequest struct {
 	// Tolerância a typos: 0=exato, 1=pouco, 2=muito. Default: 2 (human), 1 (agent)
 	Typos *int `form:"typos" example:"2" minimum:"0" maximum:"2"`
 
-	// Filtrar por status: 0=Rascunho, 1=Publicado
-	Status *int `form:"status" example:"1" enums:"0,1"`
 	// Filtrar por categoria (tema_geral)
 	Category string `form:"category" example:"documentos"`
 	// Filtrar por subcategoria

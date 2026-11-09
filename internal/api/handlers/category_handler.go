@@ -37,7 +37,6 @@ func NewCategoryHandler(categoryService *services.CategoryService) *CategoryHand
 // @Param sort_by query string false "Critério de ordenação" Enums(popularity, count, alpha) default(popularity)
 // @Param order query string false "Direção da ordenação" Enums(asc, desc) default(desc)
 // @Param include_empty query bool false "Incluir categorias sem serviços publicados" default(false)
-// @Param include_inactive query bool false "Incluir serviços inativos/rascunhos (status != 1) nas contagens e filtros" default(false)
 // @Param filter_category query string false "Nome da categoria para filtrar serviços (ex: Educação, Saúde, Transporte)"
 // @Param page query int false "Número da página para serviços filtrados (mínimo: 1)" minimum(1) default(1)
 // @Param per_page query int false "Quantidade de serviços por página (máximo: 100)" minimum(1) maximum(100) default(10)
@@ -48,13 +47,12 @@ func NewCategoryHandler(categoryService *services.CategoryService) *CategoryHand
 func (h *CategoryHandler) GetCategories(c *gin.Context) {
 	// Parse query parameters
 	req := &models.CategoryRequest{
-		SortBy:          c.DefaultQuery("sort_by", "popularity"),
-		Order:           c.DefaultQuery("order", "desc"),
-		IncludeEmpty:    c.Query("include_empty") == "true",
-		IncludeInactive: c.Query("include_inactive") == "true",
-		FilterCategory:  c.Query("filter_category"),
-		Page:            parseIntQuery(c, "page", 1),
-		PerPage:         parseIntQuery(c, "per_page", 10),
+		SortBy:         c.DefaultQuery("sort_by", "popularity"),
+		Order:          c.DefaultQuery("order", "desc"),
+		IncludeEmpty:   c.Query("include_empty") == "true",
+		FilterCategory: c.Query("filter_category"),
+		Page:           parseIntQuery(c, "page", 1),
+		PerPage:        parseIntQuery(c, "per_page", 10),
 	}
 
 	// Validar sort_by

@@ -35,7 +35,6 @@ func NewSubcategoryHandler(subcategoryService *services.SubcategoryService) *Sub
 // @Param sort_by query string false "Critério de ordenação" Enums(popularity, count, alpha) default(popularity)
 // @Param order query string false "Direção da ordenação" Enums(asc, desc) default(desc)
 // @Param include_empty query bool false "Incluir subcategorias sem serviços publicados" default(false)
-// @Param include_inactive query bool false "Incluir serviços inativos/rascunhos (status != 1) nas contagens" default(false)
 // @Success 200 {object} models.SubcategoryResponse "Lista de subcategorias com metadados"
 // @Failure 400 {object} map[string]string "Parâmetros inválidos (sort_by ou order)"
 // @Failure 500 {object} map[string]string "Erro interno ao buscar subcategorias"
@@ -53,11 +52,10 @@ func (h *SubcategoryHandler) GetSubcategories(c *gin.Context) {
 
 	// Parse query parameters
 	req := &models.SubcategoryRequest{
-		Category:        category,
-		SortBy:          c.DefaultQuery("sort_by", "popularity"),
-		Order:           c.DefaultQuery("order", "desc"),
-		IncludeEmpty:    c.Query("include_empty") == "true",
-		IncludeInactive: c.Query("include_inactive") == "true",
+		Category:     category,
+		SortBy:       c.DefaultQuery("sort_by", "popularity"),
+		Order:        c.DefaultQuery("order", "desc"),
+		IncludeEmpty: c.Query("include_empty") == "true",
 	}
 
 	// Validar sort_by
@@ -103,8 +101,7 @@ func (h *SubcategoryHandler) GetSubcategories(c *gin.Context) {
 // @Description **Casos de Uso:**
 // @Description 1. Listar serviços: GET /api/v1/subcategories/Ensino%20Fundamental/services
 // @Description 2. Paginar resultados: GET /api/v1/subcategories/Ensino%20Fundamental/services?page=2&per_page=20
-// @Description 3. Incluir inativos: GET /api/v1/subcategories/Ensino%20Fundamental/services?include_inactive=true
-// @Description 4. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos
+// @Description 3. Filtrar por categoria pai: GET /api/v1/subcategories/Certidões/services?category=Documentos
 // @Tags subcategories
 // @Accept json
 // @Produce json
@@ -112,7 +109,6 @@ func (h *SubcategoryHandler) GetSubcategories(c *gin.Context) {
 // @Param category query string false "Nome da categoria pai para desambiguar subcategorias com nomes iguais (ex: Documentos, Educação)"
 // @Param page query int false "Número da página (mínimo: 1)" minimum(1) default(1)
 // @Param per_page query int false "Quantidade de serviços por página (máximo: 100)" minimum(1) maximum(100) default(10)
-// @Param include_inactive query bool false "Incluir serviços inativos/rascunhos (status != 1)" default(false)
 // @Success 200 {object} models.SubcategoryServicesResponse "Lista de serviços da subcategoria com metadados"
 // @Failure 400 {object} map[string]string "Parâmetros inválidos (page ou per_page)"
 // @Failure 500 {object} map[string]string "Erro interno ao buscar serviços"
@@ -130,11 +126,10 @@ func (h *SubcategoryHandler) GetServicesBySubcategory(c *gin.Context) {
 
 	// Parse query parameters
 	req := &models.SubcategoryServicesRequest{
-		Subcategory:     subcategory,
-		Category:        c.Query("category"),
-		Page:            parseIntQuery(c, "page", 1),
-		PerPage:         parseIntQuery(c, "per_page", 10),
-		IncludeInactive: c.Query("include_inactive") == "true",
+		Subcategory: subcategory,
+		Category:    c.Query("category"),
+		Page:        parseIntQuery(c, "page", 1),
+		PerPage:     parseIntQuery(c, "per_page", 10),
 	}
 
 	// Validar page

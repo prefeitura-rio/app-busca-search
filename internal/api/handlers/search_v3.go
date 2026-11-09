@@ -72,7 +72,6 @@ func NewSearchHandlerV3(engine *search.Engine) *SearchHandlerV3 {
 // @Param expand query bool false "Expandir query com sinônimos. Default: true para human, false para agent." example(true)
 // @Param recency query bool false "Aplicar boost de recência (documentos recentes pontuam mais). Default: true para human, false para agent." example(true)
 // @Param typos query int false "Tolerância a erros de digitação (0=exato, 1=pouco tolerante, 2=muito tolerante). Default: 2 para human, 1 para agent." minimum(0) maximum(2) example(2)
-// @Param status query int false "Filtrar por status do serviço. 0=Rascunho, 1=Publicado." Enums(0, 1) example(1)
 // @Param category query string false "Filtrar por categoria (tema_geral). Case-insensitive." example("documentos")
 // @Param sub_category query string false "Filtrar por subcategoria. Case-insensitive." example("certidoes")
 // @Param orgao query string false "Filtrar por órgão gestor responsável pelo serviço." example("SMDC")

@@ -375,7 +375,9 @@ func (t *TypesenseAdapter) buildFilterBy(filters map[string]interface{}) string 
 	for key, value := range filters {
 		switch v := value.(type) {
 		case string:
-			parts = append(parts, fmt.Sprintf("%s:=%s", key, v))
+			// Valores de texto vêm do cliente: ficam entre backticks, sem backticks
+			// internos, para que não injetem expressões (ex.: "|| status:=0") no filtro.
+			parts = append(parts, fmt.Sprintf("%s:=`%s`", key, strings.ReplaceAll(v, "`", "")))
 		case int, int32, int64:
 			parts = append(parts, fmt.Sprintf("%s:=%d", key, v))
 		case bool:
