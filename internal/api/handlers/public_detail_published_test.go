@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,11 +27,11 @@ var detailFixtures = map[string]map[string]map[string]interface{}{
 	"prefrio_services_base": {
 		"pub-1": {
 			"id": "pub-1", "nome_servico": "Servico Publicado", "resumo": "publicado",
-			"status": 1, "slug": "servico-publicado", "slug_history": []string{"servico-publicado-antigo"},
+			"status": 1, "slug": "servico-publicado", "slug_history": []string{"servico-publicado-antigo", "slug-compartilhado"},
 		},
 		"draft-1": {
 			"id": "draft-1", "nome_servico": "Servico Rascunho", "resumo": "rascunho",
-			"status": 0, "slug": "servico-rascunho", "slug_history": []string{"servico-rascunho-antigo"},
+			"status": 0, "slug": "servico-rascunho", "slug_history": []string{"servico-rascunho-antigo", "slug-compartilhado"},
 		},
 	},
 	// Collection configurada sem filtro de publicação: não tem estado de publicação.
@@ -57,7 +60,8 @@ func newDetailFakeTypesense(t *testing.T) *httptest.Server {
 		case len(parts) == 2 && known:
 			_, _ = io.WriteString(w, `{"name":"`+parts[1]+`","fields":[],"num_documents":0}`)
 		case len(parts) == 4 && parts[2] == "documents" && parts[3] == "search":
-			writeDetailSearch(w, docs, r.URL.Query().Get("filter_by"))
+			perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+			writeDetailSearch(w, docs, r.URL.Query().Get("filter_by"), perPage)
 		case len(parts) == 4 && parts[2] == "documents":
 			doc, ok := docs[parts[3]]
 			if !ok {
@@ -73,27 +77,54 @@ func newDetailFakeTypesense(t *testing.T) *httptest.Server {
 	return server
 }
 
-func writeDetailSearch(w http.ResponseWriter, docs map[string]map[string]interface{}, filterBy string) {
+// writeDetailSearch avalia um filter_by de cláusulas "campo:=valor" unidas por " && " (valor
+// opcionalmente entre backticks) e devolve no máximo per_page hits, em ordem de id.
+func writeDetailSearch(w http.ResponseWriter, docs map[string]map[string]interface{}, filterBy string, perPage int) {
+	clauses := map[string]string{}
+	for _, clause := range strings.Split(filterBy, " && ") {
+		field, value, ok := strings.Cut(clause, ":=")
+		if !ok || strings.ContainsAny(field, " |()") {
+			http.Error(w, `{"message":"filter_by inesperado: `+filterBy+`"}`, http.StatusBadRequest)
+			return
+		}
+		clauses[field] = strings.Trim(value, "`")
+	}
+	ids := make([]string, 0, len(docs))
+	for id := range docs {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
 	hits := make([]map[string]interface{}, 0)
-	for _, doc := range docs {
-		switch {
-		case strings.HasPrefix(filterBy, "slug:="):
-			if doc["slug"] == strings.TrimPrefix(filterBy, "slug:=") {
-				hits = append(hits, map[string]interface{}{"document": doc})
-			}
-		case strings.HasPrefix(filterBy, "slug_history:="):
-			history, _ := doc["slug_history"].([]string)
-			for _, old := range history {
-				if old == strings.TrimPrefix(filterBy, "slug_history:=") {
-					hits = append(hits, map[string]interface{}{"document": doc})
-				}
-			}
+	for _, id := range ids {
+		if detailDocMatches(docs[id], clauses) && (perPage <= 0 || len(hits) < perPage) {
+			hits = append(hits, map[string]interface{}{"document": docs[id]})
 		}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"found": len(hits), "out_of": len(docs), "page": 1, "search_time_ms": 0, "hits": hits,
-		"request_params": map[string]interface{}{"collection_name": "x", "per_page": 1, "q": "*"},
+		"request_params": map[string]interface{}{"collection_name": "x", "per_page": perPage, "q": "*"},
 	})
+}
+
+func detailDocMatches(doc map[string]interface{}, clauses map[string]string) bool {
+	for field, want := range clauses {
+		switch got := doc[field].(type) {
+		case []string:
+			found := false
+			for _, v := range got {
+				found = found || v == want
+			}
+			if !found {
+				return false
+			}
+		default:
+			if got == nil || fmt.Sprint(got) != want {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // detailPublicRouter monta as rotas públicas de detalhe como em routes.go, sem nenhum
@@ -160,6 +191,8 @@ func TestPublicDetailRoutesOnlyReturnPublishedServices(t *testing.T) {
 		{"v1 slug rascunho", "/api/v1/services/servico-rascunho", http.StatusNotFound, ""},
 		{"v1 slug historico publicado", "/api/v1/services/servico-publicado-antigo", http.StatusMovedPermanently, "servico-publicado"},
 		{"v1 slug historico rascunho", "/api/v1/services/servico-rascunho-antigo", http.StatusNotFound, ""},
+		{"v1 slug historico de rascunho e de publicado", "/api/v1/services/slug-compartilhado", http.StatusMovedPermanently, "servico-publicado"},
+		{"v1 slug com expressao injetada", "/api/v1/services/x%20%7C%7C%20status:=0", http.StatusNotFound, ""},
 		{"v2 id publicado", "/api/v2/search/pub-1", http.StatusOK, "Servico Publicado"},
 		{"v2 id rascunho", "/api/v2/search/draft-1", http.StatusNotFound, ""},
 		{"v2 id rascunho com hint", "/api/v2/search/draft-1?collection=prefrio_services_base", http.StatusNotFound, ""},
