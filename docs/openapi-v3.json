@@ -2317,7 +2317,7 @@
     },
     "/api/v1/search/{id}": {
       "get": {
-        "description": "Retorna os detalhes completos de um serviço específico através de busca direta por UUID no Typesense",
+        "description": "Retorna os detalhes completos de um serviço publicado através de busca direta por UUID no Typesense. Serviço não publicado (status != 1) responde 404.",
         "tags": [
           "search"
         ],
@@ -2381,7 +2381,7 @@
     },
     "/api/v1/services/{slug}": {
       "get": {
-        "description": "Retorna os detalhes completos de um serviço através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual.",
+        "description": "Retorna os detalhes completos de um serviço publicado através do slug. Se o slug for histórico (antigo), retorna 301 redirect para o slug atual. Serviço não publicado (status != 1) responde 404.",
         "tags": [
           "services"
         ],
@@ -2695,7 +2695,7 @@
     },
     "/api/v2/search/{id}": {
       "get": {
-        "description": "Retorna documento de qualquer coleção configurada. Se 'collection' fornecido como query param, tenta buscar nessa coleção primeiro. Caso contrário, busca em todas as coleções configuradas.",
+        "description": "Retorna documento de qualquer coleção configurada. Se 'collection' fornecido como query param, tenta buscar nessa coleção primeiro. Caso contrário, busca em todas as coleções configuradas. Documento não publicado (fora do filter_field/filter_value da coleção) responde 404.",
         "tags": [
           "search-v2"
         ],
@@ -3031,7 +3031,7 @@
     },
     "/api/v3/search/{id}": {
       "get": {
-        "description": "Retorna um documento específico pelo seu identificador único.\n\nSe o parâmetro `collection` for informado, a busca é mais eficiente pois vai direto na collection especificada.\nCaso contrário, o sistema busca em todas as collections disponíveis.",
+        "description": "Retorna um documento específico pelo seu identificador único.\n\nSe o parâmetro `collection` for informado, a busca é mais eficiente pois vai direto na collection especificada.\nCaso contrário, o sistema busca em todas as collections disponíveis.\n\nSó devolve documento publicado (status=1 em prefrio_services_base) de collection configurada; os demais respondem 404.",
         "tags": [
           "search-v3"
         ],
