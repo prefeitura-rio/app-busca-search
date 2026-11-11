@@ -10,7 +10,7 @@
 //
 // ## Gemini
 //   - GEMINI_API_KEY: Chave da API Google Gemini
-//   - GEMINI_EMBEDDING_MODEL: Modelo para embeddings (default: text-embedding-004)
+//   - GEMINI_EMBEDDING_MODEL: Modelo para embeddings (default: gemini-embedding-001; modelos desligados pelo Google, como text-embedding-004, são trocados pelo default)
 //   - GEMINI_CHAT_MODEL: Modelo para chat/análise (default: gemini-2.0-flash)
 //
 // ## Search v3
@@ -158,7 +158,7 @@ func LoadConfig() *Config {
 
 		// Gemini configuration
 		GeminiAPIKey:         getEnv("GEMINI_API_KEY", ""),
-		GeminiEmbeddingModel: getEnv("GEMINI_EMBEDDING_MODEL", "text-embedding-004"),
+		GeminiEmbeddingModel: ResolveGeminiEmbeddingModel(getEnv("GEMINI_EMBEDDING_MODEL", DefaultGeminiEmbeddingModel)),
 		GeminiChatModel:      getEnv("GEMINI_CHAT_MODEL", "gemini-3-pro-preview"),
 
 		// Tracing configuration

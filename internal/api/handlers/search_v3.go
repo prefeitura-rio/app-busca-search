@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -84,6 +85,7 @@ func NewSearchHandlerV3(engine *search.Engine) *SearchHandlerV3 {
 // @Success 200 {object} v3.FilteredSearchResponse "Resposta com campos filtrados (quando fields é especificado)"
 // @Failure 400 {object} map[string]string "Parâmetros inválidos ou query vazia"
 // @Failure 500 {object} map[string]string "Erro interno do servidor"
+// @Failure 503 {object} map[string]string "Busca semântica indisponível (embedding não gerado)"
 // @Router /api/v3/search [get]
 func (h *SearchHandlerV3) Search(c *gin.Context) {
 	var req v3.SearchRequest
@@ -107,6 +109,11 @@ func (h *SearchHandlerV3) Search(c *gin.Context) {
 	// Executa busca
 	result, err := h.engine.Search(c.Request.Context(), &req)
 	if err != nil {
+		if errors.Is(err, search.ErrEmbeddingService) {
+			// Sem o erro do provedor na resposta: ele fica no log do servidor
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "busca semântica indisponível no momento"})
+			return
+		}
 		status := http.StatusInternalServerError
 		if err == v3.ErrQueryRequired || err == v3.ErrInvalidSearchType {
 			status = http.StatusBadRequest

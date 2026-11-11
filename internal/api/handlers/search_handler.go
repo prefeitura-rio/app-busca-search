@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -45,6 +46,7 @@ func NewSearchHandler(searchService *services.SearchService, typesenseClient *ty
 // @Success 200 {object} models.SearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 503 {object} map[string]string "Busca semântica indisponível (embedding não gerado)"
 // @Router /api/v1/search [get]
 func (h *SearchHandler) Search(c *gin.Context) {
 	var req models.SearchRequest
@@ -117,6 +119,11 @@ func (h *SearchHandler) Search(c *gin.Context) {
 			return
 		}
 
+		if errors.Is(err, services.ErrEmbeddingUnavailable) {
+			respondEmbeddingUnavailable(c)
+			return
+		}
+
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Erro ao executar busca",
 			"details": err.Error(),
@@ -125,6 +132,15 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// respondEmbeddingUnavailable responde 503 à busca semântica cujo embedding não pôde
+// ser gerado, sem expor o erro do provedor (que fica no log do servidor).
+func respondEmbeddingUnavailable(c *gin.Context) {
+	c.JSON(http.StatusServiceUnavailable, gin.H{
+		"error":   "Busca semântica indisponível no momento",
+		"details": "Tente novamente mais tarde ou use type=keyword",
+	})
 }
 
 // GetDocumentByID godoc

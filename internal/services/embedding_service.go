@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -80,6 +81,11 @@ func (g *GeminiEmbeddingProvider) GenerateEmbedding(ctx context.Context, text st
 			return nil, fmt.Errorf("context canceled: %w", ctx.Err())
 		}
 
+		// Erro do cliente (modelo inexistente, chave inválida...) não muda numa nova tentativa
+		if !isRetryableEmbeddingError(lastErr) {
+			return nil, lastErr
+		}
+
 		// Log do erro e retry
 		if attempt < g.maxRetries {
 			log.Printf("Embedding generation failed (attempt %d/%d): %v, retrying...", attempt, g.maxRetries, lastErr)
@@ -88,6 +94,16 @@ func (g *GeminiEmbeddingProvider) GenerateEmbedding(ctx context.Context, text st
 	}
 
 	return nil, fmt.Errorf("failed after %d attempts: %w", g.maxRetries, lastErr)
+}
+
+// isRetryableEmbeddingError indica se vale repetir a chamada ao Gemini: erros 4xx
+// (exceto 429, limite de taxa) são do pedido e se repetiriam iguais.
+func isRetryableEmbeddingError(err error) bool {
+	var apiErr genai.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Code == 429 || apiErr.Code >= 500 || apiErr.Code < 400
+	}
+	return true
 }
 
 // generateWithTimeout gera embedding com o contexto fornecido

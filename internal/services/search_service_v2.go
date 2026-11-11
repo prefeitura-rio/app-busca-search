@@ -107,13 +107,14 @@ func (ss *SearchServiceV2) KeywordSearch(ctx context.Context, req *models.Search
 // SemanticSearch executes vector-based search across multiple collections
 func (ss *SearchServiceV2) SemanticSearch(ctx context.Context, req *models.SearchRequest) (*models.UnifiedSearchResponse, error) {
 	if ss.embeddingService == nil {
-		return nil, fmt.Errorf("serviço de embedding não disponível")
+		return nil, fmt.Errorf("%w: serviço de embeddings não configurado", ErrEmbeddingUnavailable)
 	}
 
 	// Generate embedding for query
 	embedding, err := ss.embeddingService.GenerateEmbedding(ctx, req.Query)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao gerar embedding: %w", err)
+		logEmbeddingFailure("v2", err)
+		return nil, fmt.Errorf("%w: %v", ErrEmbeddingUnavailable, err)
 	}
 
 	collections, err := ss.getCollections(req.ParsedCollections)
@@ -169,6 +170,7 @@ func (ss *SearchServiceV2) SemanticSearch(ctx context.Context, req *models.Searc
 func (ss *SearchServiceV2) HybridSearch(ctx context.Context, req *models.SearchRequest) (*models.UnifiedSearchResponse, error) {
 	if ss.embeddingService == nil {
 		// Fallback to keyword search if embeddings unavailable
+		recordEmbeddingFallback(ctx, "v2", string(req.Type), fallbackEmbeddingNotConfigured, nil)
 		return ss.KeywordSearch(ctx, req)
 	}
 
@@ -176,6 +178,7 @@ func (ss *SearchServiceV2) HybridSearch(ctx context.Context, req *models.SearchR
 	embedding, err := ss.embeddingService.GenerateEmbedding(ctx, req.Query)
 	if err != nil {
 		// Fallback to keyword search on embedding error
+		recordEmbeddingFallback(ctx, "v2", string(req.Type), fallbackEmbeddingUnavailable, err)
 		return ss.KeywordSearch(ctx, req)
 	}
 

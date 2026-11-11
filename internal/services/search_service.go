@@ -196,7 +196,7 @@ func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchR
 
 	if ss.embeddingService == nil {
 		span.SetStatus(codes.Error, "Embedding service not configured")
-		return nil, fmt.Errorf("busca semântica requer serviço de embeddings configurado")
+		return nil, fmt.Errorf("%w: serviço de embeddings não configurado", ErrEmbeddingUnavailable)
 	}
 
 	// Gerar embedding da query com timeout
@@ -215,7 +215,8 @@ func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchR
 			return nil, ErrSearchCanceled
 		}
 		span.SetStatus(codes.Error, "Embedding generation failed")
-		return nil, fmt.Errorf("erro ao gerar embedding: %v", err)
+		logEmbeddingFailure("v1", err)
+		return nil, fmt.Errorf("%w: %v", ErrEmbeddingUnavailable, err)
 	}
 
 	span.SetAttributes(attribute.Int("search.embedding.dimensions", len(embedding)))
@@ -252,7 +253,7 @@ func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchReq
 
 		if err != nil {
 			span.AddEvent("Fallback to KeywordSearch due to embedding failure")
-			log.Printf("Hybrid search fallback to keyword: %v", err)
+			recordEmbeddingFallback(ctx, "v1", string(req.Type), fallbackEmbeddingUnavailable, err)
 			return ss.KeywordSearch(ctx, req)
 		}
 
@@ -260,6 +261,7 @@ func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchReq
 	} else {
 		// Sem embeddings, fallback para keyword
 		span.AddEvent("Fallback to KeywordSearch - no embedding service")
+		recordEmbeddingFallback(ctx, "v1", string(req.Type), fallbackEmbeddingNotConfigured, nil)
 		return ss.KeywordSearch(ctx, req)
 	}
 
@@ -492,6 +494,10 @@ func (ss *SearchService) AIAgentSearch(ctx context.Context, req *models.SearchRe
 		results, err = ss.SemanticSearch(ctx, req)
 		if err == nil {
 			metrics.GeminiCalls++ // embedding
+		} else if errors.Is(err, ErrEmbeddingUnavailable) {
+			// Sem embedding a busca AI não falha: segue pela híbrida, que cai para keyword
+			span.AddEvent("Fallback to HybridSearch - embedding unavailable")
+			results, err = ss.HybridSearch(ctx, req)
 		}
 	case "keyword":
 		results, err = ss.KeywordSearch(ctx, req)

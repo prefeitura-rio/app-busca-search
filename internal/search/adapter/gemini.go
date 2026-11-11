@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prefeitura-rio/app-busca-search/internal/config"
 	"google.golang.org/genai"
 )
 
@@ -24,7 +25,7 @@ type GeminiConfig struct {
 // DefaultGeminiConfig retorna configuração padrão
 func DefaultGeminiConfig() GeminiConfig {
 	return GeminiConfig{
-		EmbeddingModel:      "text-embedding-004",
+		EmbeddingModel:      config.DefaultGeminiEmbeddingModel,
 		ChatModel:           "gemini-2.0-flash",
 		EmbeddingDimensions: 768,
 		MaxTextLength:       10000,

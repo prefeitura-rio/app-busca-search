@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -128,6 +129,7 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 			return nil, ErrEmbeddingService
 		}
 		// Fallback para keyword em hybrid/AI
+		recordEmbeddingFallback(ctx, req.Type, "embedding_service_not_configured", nil)
 		req.Type = v3.SearchTypeKeyword
 		needsEmbedding = false
 		needsAnalysis = false
@@ -170,9 +172,11 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 		// Trata erro de embedding
 		if embeddingErr != nil {
 			if req.Type == v3.SearchTypeSemantic {
+				log.Printf("ERROR search_embedding_failed api=v3 requested=semantic error=%q", embeddingErr.Error())
 				return nil, fmt.Errorf("%w: %v", ErrEmbeddingService, embeddingErr)
 			}
-			// Fallback para keyword
+			// Fallback para keyword, visível no log e no span para alerta
+			recordEmbeddingFallback(ctx, req.Type, "embedding_unavailable", embeddingErr)
 			req.Type = v3.SearchTypeKeyword
 		}
 

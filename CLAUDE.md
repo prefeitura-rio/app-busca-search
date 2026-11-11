@@ -114,7 +114,7 @@ Response with Sorted Results
 ## Important Implementation Details
 
 ### Embedding Generation
-- Uses Google Gemini `text-embedding-004` model
+- Uses Google Gemini `gemini-embedding-001` model (`text-embedding-004` was shut down by Google on 2026-01-14; a retired model in `GEMINI_EMBEDDING_MODEL` is replaced by the default)
 - Generates 768-dimensional float32 vectors
 - Falls back to text-only search if Gemini unavailable
 - Embeddings stored in Typesense with `embedding` field (excluded from responses)
@@ -159,7 +159,7 @@ SERVER_PORT=8080
 
 # Google Gemini
 GEMINI_API_KEY=your-gemini-key
-GEMINI_EMBEDDING_MODEL=text-embedding-004
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 
 # Relevance Data (CSV files in data/)
 RELEVANCIA_ARQUIVO_1746=data/volumetria_1746.csv
