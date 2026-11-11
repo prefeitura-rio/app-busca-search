@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -42,6 +43,7 @@ func NewSearchHandlerV2(searchService *services.SearchServiceV2) *SearchHandlerV
 // @Success 200 {object} models.UnifiedSearchResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
+// @Failure 503 {object} map[string]string "Busca semântica indisponível (embedding não gerado)"
 // @Router /api/v2/search [get]
 func (h *SearchHandlerV2) Search(c *gin.Context) {
 	var req models.SearchRequest
@@ -122,6 +124,10 @@ func (h *SearchHandlerV2) Search(c *gin.Context) {
 
 	result, err := h.searchService.Search(c.Request.Context(), &req)
 	if err != nil {
+		if errors.Is(err, services.ErrEmbeddingUnavailable) {
+			respondEmbeddingUnavailable(c)
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Erro ao executar busca",
 			"details": err.Error(),

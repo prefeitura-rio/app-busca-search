@@ -196,7 +196,7 @@ func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchR
 
 	if ss.embeddingService == nil {
 		span.SetStatus(codes.Error, "Embedding service not configured")
-		return nil, fmt.Errorf("busca semântica requer serviço de embeddings configurado")
+		return nil, fmt.Errorf("%w: serviço de embeddings não configurado", ErrEmbeddingUnavailable)
 	}
 
 	// Gerar embedding da query com timeout
@@ -215,7 +215,8 @@ func (ss *SearchService) SemanticSearch(ctx context.Context, req *models.SearchR
 			return nil, ErrSearchCanceled
 		}
 		span.SetStatus(codes.Error, "Embedding generation failed")
-		return nil, fmt.Errorf("erro ao gerar embedding: %v", err)
+		logEmbeddingFailure("v1", err)
+		return nil, fmt.Errorf("%w: %v", ErrEmbeddingUnavailable, err)
 	}
 
 	span.SetAttributes(attribute.Int("search.embedding.dimensions", len(embedding)))
@@ -251,14 +252,23 @@ func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchReq
 		embeddingSpan.End()
 
 		if err != nil {
+			span.RecordError(err)
+			span.SetAttributes(
+				attribute.Bool("search.degraded", true),
+				attribute.String("search.fallback_reason", "embedding_unavailable"),
+			)
 			span.AddEvent("Fallback to KeywordSearch due to embedding failure")
-			log.Printf("Hybrid search fallback to keyword: %v", err)
+			logEmbeddingFallback("v1", string(req.Type), err)
 			return ss.KeywordSearch(ctx, req)
 		}
 
 		span.SetAttributes(attribute.Int("search.embedding.dimensions", len(embedding)))
 	} else {
 		// Sem embeddings, fallback para keyword
+		span.SetAttributes(
+			attribute.Bool("search.degraded", true),
+			attribute.String("search.fallback_reason", "embedding_service_not_configured"),
+		)
 		span.AddEvent("Fallback to KeywordSearch - no embedding service")
 		return ss.KeywordSearch(ctx, req)
 	}

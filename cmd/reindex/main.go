@@ -376,10 +376,7 @@ func (r *Reindexer) generateEmbedding(ctx context.Context, text string) ([]float
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	model := r.embeddingModel
-	if model == "" {
-		model = "text-embedding-004"
-	}
+	model := config.ResolveGeminiEmbeddingModel(r.embeddingModel)
 
 	content := genai.NewContentFromText(text, genai.RoleUser)
 	outputDim := int32(768)
