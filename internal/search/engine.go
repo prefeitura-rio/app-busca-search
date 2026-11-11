@@ -129,6 +129,7 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 			return nil, ErrEmbeddingService
 		}
 		// Fallback para keyword em hybrid/AI
+		recordEmbeddingFallback(ctx, req.Type, "embedding_service_not_configured", nil)
 		req.Type = v3.SearchTypeKeyword
 		needsEmbedding = false
 		needsAnalysis = false
@@ -174,9 +175,8 @@ func (e *Engine) Search(ctx context.Context, req *v3.SearchRequest) (*v3.SearchR
 				log.Printf("ERROR search_embedding_failed api=v3 requested=semantic error=%q", embeddingErr.Error())
 				return nil, fmt.Errorf("%w: %v", ErrEmbeddingService, embeddingErr)
 			}
-			// Fallback para keyword, visível no log para alerta
-			log.Printf("WARN search_degraded api=v3 requested=%s executed=keyword reason=embedding_unavailable error=%q",
-				req.Type, embeddingErr.Error())
+			// Fallback para keyword, visível no log e no span para alerta
+			recordEmbeddingFallback(ctx, req.Type, "embedding_unavailable", embeddingErr)
 			req.Type = v3.SearchTypeKeyword
 		}
 

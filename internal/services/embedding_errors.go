@@ -1,8 +1,18 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"log"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// Motivos de degradação registrados em log e no span
+const (
+	fallbackEmbeddingUnavailable   = "embedding_unavailable"
+	fallbackEmbeddingNotConfigured = "embedding_service_not_configured"
 )
 
 // ErrEmbeddingUnavailable indica que o embedding da query não pôde ser gerado
@@ -10,12 +20,20 @@ import (
 // segura para o cliente; o erro original do provedor fica só no log do servidor.
 var ErrEmbeddingUnavailable = errors.New("busca semântica indisponível no momento")
 
-// logEmbeddingFallback registra, num formato estável para alerta em log
-// (`search_degraded`), que uma busca que dependia de embeddings foi executada
-// como keyword.
-func logEmbeddingFallback(apiVersion string, requested string, cause error) {
-	log.Printf("WARN search_degraded api=%s requested=%s executed=keyword reason=embedding_unavailable error=%q",
-		apiVersion, requested, errorText(cause))
+// recordEmbeddingFallback registra, num formato estável para alerta em log
+// (`search_degraded`) e no span ativo (`search.degraded`), que uma busca que
+// dependia de embeddings foi executada como keyword.
+func recordEmbeddingFallback(ctx context.Context, apiVersion string, requested string, reason string, cause error) {
+	span := trace.SpanFromContext(ctx)
+	span.SetAttributes(
+		attribute.Bool("search.degraded", true),
+		attribute.String("search.fallback_reason", reason),
+	)
+	if cause != nil {
+		span.RecordError(cause)
+	}
+	log.Printf("WARN search_degraded api=%s requested=%s executed=keyword reason=%s error=%q",
+		apiVersion, requested, reason, errorText(cause))
 }
 
 // logEmbeddingFailure registra a falha de embedding de uma busca semântica, que

@@ -252,24 +252,16 @@ func (ss *SearchService) HybridSearch(ctx context.Context, req *models.SearchReq
 		embeddingSpan.End()
 
 		if err != nil {
-			span.RecordError(err)
-			span.SetAttributes(
-				attribute.Bool("search.degraded", true),
-				attribute.String("search.fallback_reason", "embedding_unavailable"),
-			)
 			span.AddEvent("Fallback to KeywordSearch due to embedding failure")
-			logEmbeddingFallback("v1", string(req.Type), err)
+			recordEmbeddingFallback(ctx, "v1", string(req.Type), fallbackEmbeddingUnavailable, err)
 			return ss.KeywordSearch(ctx, req)
 		}
 
 		span.SetAttributes(attribute.Int("search.embedding.dimensions", len(embedding)))
 	} else {
 		// Sem embeddings, fallback para keyword
-		span.SetAttributes(
-			attribute.Bool("search.degraded", true),
-			attribute.String("search.fallback_reason", "embedding_service_not_configured"),
-		)
 		span.AddEvent("Fallback to KeywordSearch - no embedding service")
+		recordEmbeddingFallback(ctx, "v1", string(req.Type), fallbackEmbeddingNotConfigured, nil)
 		return ss.KeywordSearch(ctx, req)
 	}
 
@@ -502,6 +494,10 @@ func (ss *SearchService) AIAgentSearch(ctx context.Context, req *models.SearchRe
 		results, err = ss.SemanticSearch(ctx, req)
 		if err == nil {
 			metrics.GeminiCalls++ // embedding
+		} else if errors.Is(err, ErrEmbeddingUnavailable) {
+			// Sem embedding a busca AI não falha: segue pela híbrida, que cai para keyword
+			span.AddEvent("Fallback to HybridSearch - embedding unavailable")
+			results, err = ss.HybridSearch(ctx, req)
 		}
 	case "keyword":
 		results, err = ss.KeywordSearch(ctx, req)

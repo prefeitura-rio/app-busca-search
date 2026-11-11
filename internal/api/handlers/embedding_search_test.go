@@ -19,6 +19,9 @@ import (
 	"github.com/prefeitura-rio/app-busca-search/internal/search/adapter"
 	"github.com/prefeitura-rio/app-busca-search/internal/services"
 	"github.com/typesense/typesense-go/v3/typesense"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/genai"
 )
 
@@ -45,6 +48,14 @@ func newFakeGemini(t *testing.T) *fakeGemini {
 		w.Header().Set("Content-Type", "application/json")
 		const prefix = "/v1beta/models/"
 		const suffix = ":batchEmbedContents"
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, ":generateContent") {
+			// Análise da busca AI (v1): o LLM escolhe a estratégia semantic
+			analysis := "```json\n{\"intent\":\"buscar_servico\",\"keywords\":[\"exame\"],\"search_strategy\":\"semantic\",\"confidence\":0.9}\n```"
+			_ = json.NewEncoder(w).Encode(map[string]any{"candidates": []map[string]any{{
+				"content": map[string]any{"role": "model", "parts": []map[string]any{{"text": analysis}}},
+			}}})
+			return
+		}
 		if r.Method != http.MethodPost || !strings.HasPrefix(r.URL.Path, prefix) || !strings.HasSuffix(r.URL.Path, suffix) {
 			http.Error(w, "rota inesperada: "+r.Method+" "+r.URL.Path, http.StatusBadRequest)
 			return
@@ -380,6 +391,111 @@ func TestHybridSearch_FallbackIsVisible(t *testing.T) {
 			if strings.Contains(w.Body.String(), "NOT_FOUND") {
 				t.Fatalf("resposta vaza o erro do Gemini: %s", w.Body.String())
 			}
+		})
+	}
+}
+
+// DEV-511: no v1, a busca AI cuja estratégia é semantic não falha quando o embedding
+// falha: segue pela híbrida, que cai para keyword e registra a degradação.
+func TestAISearch_SemanticStrategyFallsBackWhenEmbeddingFails(t *testing.T) {
+	ts := newVectorTypesense(t)
+	gemini := newFakeGemini(t)
+	r := embeddingRouter(t, ts, gemini, retiredModel)
+	logs := captureLog(t)
+
+	w := get(r, "/api/v1/search?q=exame&type=ai&per_page=2")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(logs.String(), "WARN search_degraded api=v1 requested=ai executed=keyword") {
+		t.Fatalf("log sem a degradação da busca AI: %s", logs.String())
+	}
+	if strings.Contains(w.Body.String(), "NOT_FOUND") {
+		t.Fatalf("resposta vaza o erro do Gemini: %s", w.Body.String())
+	}
+}
+
+// DEV-511: sem serviço de embeddings configurado, a busca híbrida cai para keyword e
+// registra a degradação nos três endpoints.
+func TestHybridSearch_NoEmbeddingServiceFallbackIsVisible(t *testing.T) {
+	ts := newVectorTypesense(t)
+	gin.SetMode(gin.TestMode)
+	tsClient := ts.client()
+	cfg := &config.Config{
+		SearchableCollections: []string{"prefrio_services_base"},
+		CollectionConfigs: map[string]*config.CollectionConfig{
+			"prefrio_services_base": {Type: "service", FilterField: "status", FilterValue: "1"},
+		},
+	}
+	engine := search.NewEngine(
+		adapter.NewTypesenseAdapter(tsClient, ts.server.URL, "test-key"),
+		nil, nil, nil,
+		map[string]*v3.CollectionConfig{"prefrio_services_base": v3.DefaultPrefRioConfig()},
+		"prefrio_services_base",
+	)
+	r := gin.New()
+	r.GET("/api/v1/search", NewSearchHandler(services.NewSearchService(tsClient, nil, "", "", services.NewLRUCache(10), ts.server.URL, "test-key"), nil).Search)
+	r.GET("/api/v2/search", NewSearchHandlerV2(services.NewSearchServiceV2(tsClient, nil, cfg)).Search)
+	r.GET("/api/v3/search", NewSearchHandlerV3(engine).Search)
+
+	for _, version := range searchVersions {
+		t.Run(version, func(t *testing.T) {
+			logs := captureLog(t)
+			w := get(r, version+"?q=exame&type=hybrid&per_page=2")
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(logs.String(), "WARN search_degraded") || !strings.Contains(logs.String(), "reason=embedding_service_not_configured") {
+				t.Fatalf("log sem a degradação padronizada: %s", logs.String())
+			}
+		})
+	}
+}
+
+// DEV-511: a degradação do hybrid também fica no trace (search.degraded=true e o motivo),
+// para alerta no SigNoz, nos três endpoints.
+func TestHybridSearch_FallbackIsMarkedOnSpan(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() { otel.SetTracerProvider(previous) })
+
+	ts := newVectorTypesense(t)
+	gemini := newFakeGemini(t)
+	inner := embeddingRouter(t, ts, gemini, retiredModel)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		ctx, span := tp.Tracer("test").Start(c.Request.Context(), "http.request")
+		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+		span.End()
+	})
+	r.NoRoute(func(c *gin.Context) { inner.HandleContext(c) })
+	captureLog(t)
+
+	for _, version := range searchVersions {
+		t.Run(version, func(t *testing.T) {
+			before := len(recorder.Ended())
+			w := get(r, version+"?q=exame&type=hybrid&per_page=2")
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+			}
+			for _, span := range recorder.Ended()[before:] {
+				degraded, reason := false, ""
+				for _, kv := range span.Attributes() {
+					switch string(kv.Key) {
+					case "search.degraded":
+						degraded = kv.Value.AsBool()
+					case "search.fallback_reason":
+						reason = kv.Value.AsString()
+					}
+				}
+				if degraded && reason == "embedding_unavailable" {
+					return
+				}
+			}
+			t.Fatal("nenhum span com search.degraded=true e search.fallback_reason=embedding_unavailable")
 		})
 	}
 }

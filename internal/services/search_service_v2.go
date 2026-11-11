@@ -170,6 +170,7 @@ func (ss *SearchServiceV2) SemanticSearch(ctx context.Context, req *models.Searc
 func (ss *SearchServiceV2) HybridSearch(ctx context.Context, req *models.SearchRequest) (*models.UnifiedSearchResponse, error) {
 	if ss.embeddingService == nil {
 		// Fallback to keyword search if embeddings unavailable
+		recordEmbeddingFallback(ctx, "v2", string(req.Type), fallbackEmbeddingNotConfigured, nil)
 		return ss.KeywordSearch(ctx, req)
 	}
 
@@ -177,7 +178,7 @@ func (ss *SearchServiceV2) HybridSearch(ctx context.Context, req *models.SearchR
 	embedding, err := ss.embeddingService.GenerateEmbedding(ctx, req.Query)
 	if err != nil {
 		// Fallback to keyword search on embedding error
-		logEmbeddingFallback("v2", string(req.Type), err)
+		recordEmbeddingFallback(ctx, "v2", string(req.Type), fallbackEmbeddingUnavailable, err)
 		return ss.KeywordSearch(ctx, req)
 	}
 
