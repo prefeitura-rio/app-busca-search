@@ -1480,9 +1480,39 @@ func publishedSlugFilter(field, slug string) string {
 
 // GetPrefRioServiceBySlug busca um serviço publicado pelo slug atual
 func (c *Client) GetPrefRioServiceBySlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
+	return c.getPublishedServiceBySlugField(ctx, "slug", slug)
+}
+
+// GetPrefRioServiceByHistoricalSlug busca um serviço publicado que tenha o slug no histórico
+func (c *Client) GetPrefRioServiceByHistoricalSlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
+	return c.getPublishedServiceBySlugField(ctx, "slug_history", slug)
+}
+
+// isMissingFilterField diz se o Typesense recusou o filter_by porque o campo não existe no schema
+// da collection (por exemplo, slug e slug_history antes da migração para o schema v3).
+func isMissingFilterField(err error, field string) bool {
+	var httpErr *typesense.HTTPError
+	return errors.As(err, &httpErr) && httpErr.Status == http.StatusBadRequest &&
+		strings.Contains(string(httpErr.Body), "Could not find a filter field named `"+field+"`")
+}
+
+// getPublishedServiceBySlugField busca o serviço publicado cujo campo (slug ou slug_history) tem o
+// slug. Devolve (nil, nil) quando não há serviço publicado com ele. Se a collection servida ainda não
+// indexa o campo (schema v3 não aplicado), usa findPublishedServiceBySlugScan.
+func (c *Client) getPublishedServiceBySlugField(ctx context.Context, field, slug string) (*models.PrefRioService, error) {
+	service, err := c.searchOnePrefRioService(ctx, publishedSlugFilter(field, slug))
+	if isMissingFilterField(err, field) {
+		log.Printf("[GetServiceBySlug] campo %s não é filtrável em prefrio_services_base (schema v3 não aplicado?): usando a busca de compatibilidade", field)
+		return c.findPublishedServiceBySlugScan(ctx, field, slug)
+	}
+	return service, err
+}
+
+// searchOnePrefRioService devolve o primeiro serviço que atende o filter_by, sem o embedding,
+// ou (nil, nil) quando nenhum atende.
+func (c *Client) searchOnePrefRioService(ctx context.Context, filterBy string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
 
-	filterBy := publishedSlugFilter("slug", slug)
 	searchParams := &api.SearchCollectionParams{
 		Q:             stringPtr("*"),
 		FilterBy:      &filterBy,
@@ -1494,7 +1524,7 @@ func (c *Client) GetPrefRioServiceBySlug(ctx context.Context, slug string) (*mod
 
 	result, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao buscar serviço: %v", err)
+		return nil, fmt.Errorf("erro ao buscar serviço: %w", err)
 	}
 
 	if result.Found == nil || *result.Found == 0 {
@@ -1539,65 +1569,86 @@ func (c *Client) GetPrefRioServiceBySlug(ctx context.Context, slug string) (*mod
 	return &service, nil
 }
 
-// GetPrefRioServiceByHistoricalSlug busca um serviço publicado que tenha o slug no histórico
-func (c *Client) GetPrefRioServiceByHistoricalSlug(ctx context.Context, slug string) (*models.PrefRioService, error) {
+const (
+	// slugScanPerPage é o tamanho de página da busca de compatibilidade (máximo do Typesense).
+	slugScanPerPage = 250
+	// slugScanMaxPages limita a busca de compatibilidade a 10.000 serviços publicados.
+	slugScanMaxPages = 40
+)
+
+// findPublishedServiceBySlugScan é a busca por slug de uma collection que ainda não indexa slug e
+// slug_history (schema anterior ao v3), mas guarda esses campos nos documentos: percorre os serviços
+// publicados lendo só id, nome_servico, slug e slug_history e compara o slug exato. Documento sem
+// slug gravado é comparado pelo slug que a migração v3 geraria (utils.GenerateSlug).
+func (c *Client) findPublishedServiceBySlugScan(ctx context.Context, field, slug string) (*models.PrefRioService, error) {
 	collectionName := "prefrio_services_base"
+	filterBy := fmt.Sprintf("status:=%d", models.ServiceStatusPublished)
 
-	filterBy := publishedSlugFilter("slug_history", slug)
-	searchParams := &api.SearchCollectionParams{
-		Q:             stringPtr("*"),
-		FilterBy:      &filterBy,
-		Page:          intPtr(1),
-		PerPage:       intPtr(1),
-		IncludeFields: stringPtr("*"),
-		ExcludeFields: stringPtr("embedding"),
+	for page := 1; page <= slugScanMaxPages; page++ {
+		searchParams := &api.SearchCollectionParams{
+			Q:             stringPtr("*"),
+			FilterBy:      &filterBy,
+			Page:          intPtr(page),
+			PerPage:       intPtr(slugScanPerPage),
+			IncludeFields: stringPtr("id,nome_servico,slug,slug_history"),
+		}
+
+		result, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
+		if err != nil {
+			return nil, fmt.Errorf("erro ao buscar serviço: %w", err)
+		}
+		if result.Hits == nil {
+			return nil, nil
+		}
+
+		for _, hit := range *result.Hits {
+			if hit.Document == nil {
+				continue
+			}
+			doc := *hit.Document
+			id, _ := doc["id"].(string)
+			if id == "" || !docHasSlug(doc, field, id, slug) {
+				continue
+			}
+
+			service, err := c.GetPrefRioService(ctx, id)
+			if err != nil {
+				return nil, fmt.Errorf("erro ao buscar serviço: %w", err)
+			}
+			if service.Status != models.ServiceStatusPublished {
+				return nil, nil
+			}
+			service.Embedding = nil
+			return service, nil
+		}
+
+		if len(*result.Hits) < slugScanPerPage {
+			return nil, nil
+		}
 	}
 
-	result, err := c.client.Collection(collectionName).Documents().Search(ctx, searchParams)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao buscar serviço: %v", err)
+	log.Printf("[GetServiceBySlug] busca de compatibilidade por %s parou no limite de %d serviços publicados", field, slugScanPerPage*slugScanMaxPages)
+	return nil, nil
+}
+
+// docHasSlug diz se o documento tem o slug no campo pedido: slug (o atual) ou slug_history.
+func docHasSlug(doc map[string]interface{}, field, id, slug string) bool {
+	if field == "slug_history" {
+		history, _ := doc["slug_history"].([]interface{})
+		for _, old := range history {
+			if s, ok := old.(string); ok && s == slug {
+				return true
+			}
+		}
+		return false
 	}
 
-	if result.Found == nil || *result.Found == 0 {
-		return nil, nil
+	current, _ := doc["slug"].(string)
+	if current == "" {
+		nomeServico, _ := doc["nome_servico"].(string)
+		current = utils.GenerateSlug(nomeServico, id)
 	}
-
-	resultBytes, err := json.Marshal(result)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao serializar resultado: %v", err)
-	}
-
-	var resultMap map[string]interface{}
-	if err := json.Unmarshal(resultBytes, &resultMap); err != nil {
-		return nil, fmt.Errorf("erro ao deserializar resultado: %v", err)
-	}
-
-	hits, ok := resultMap["hits"].([]interface{})
-	if !ok || len(hits) == 0 {
-		return nil, nil
-	}
-
-	hitMap, ok := hits[0].(map[string]interface{})
-	if !ok {
-		return nil, nil
-	}
-
-	doc, ok := hitMap["document"].(map[string]interface{})
-	if !ok {
-		return nil, nil
-	}
-
-	docBytes, err := json.Marshal(doc)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao serializar documento: %v", err)
-	}
-
-	var service models.PrefRioService
-	if err := json.Unmarshal(docBytes, &service); err != nil {
-		return nil, fmt.Errorf("erro ao deserializar documento: %v", err)
-	}
-
-	return &service, nil
+	return current != "" && current == slug
 }
 
 // ListPrefRioServices lista serviços com paginação e filtros

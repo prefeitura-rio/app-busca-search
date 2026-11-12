@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -200,9 +201,10 @@ func (h *SearchHandler) GetServiceBySlug(c *gin.Context) {
 	// Tenta buscar pelo slug atual
 	service, err := h.typesenseClient.GetPrefRioServiceBySlug(ctx, slug)
 	if err != nil {
+		// O detalhe do erro do Typesense fica só no log interno
+		log.Printf("[GetServiceBySlug] erro ao buscar serviço pelo slug %q: %v", slug, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Erro ao buscar serviço",
-			"details": err.Error(),
+			"error": "Erro ao buscar serviço",
 		})
 		return
 	}
@@ -215,9 +217,9 @@ func (h *SearchHandler) GetServiceBySlug(c *gin.Context) {
 	// Não encontrou pelo slug atual, tenta buscar no histórico
 	service, err = h.typesenseClient.GetPrefRioServiceByHistoricalSlug(ctx, slug)
 	if err != nil {
+		log.Printf("[GetServiceBySlug] erro ao buscar serviço pelo slug histórico %q: %v", slug, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Erro ao buscar serviço",
-			"details": err.Error(),
+			"error": "Erro ao buscar serviço",
 		})
 		return
 	}
