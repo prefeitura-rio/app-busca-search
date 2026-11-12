@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"reflect"
@@ -15,6 +16,9 @@ import (
 	api "github.com/typesense/typesense-go/v3/typesense/api"
 	"github.com/typesense/typesense-go/v3/typesense/api/pointer"
 )
+
+// ErrVersionNotFound indica que a versão pedida não existe para o serviço.
+var ErrVersionNotFound = errors.New("versão não encontrada")
 
 // VersionService gerencia o histórico de versões dos serviços
 type VersionService struct {
@@ -359,7 +363,7 @@ func (vs *VersionService) GetVersionByNumber(ctx context.Context, serviceID stri
 	}
 
 	if len(searchResult.Hits) == 0 {
-		return nil, fmt.Errorf("versão %d não encontrada", versionNumber)
+		return nil, fmt.Errorf("versão %d: %w", versionNumber, ErrVersionNotFound)
 	}
 
 	return &searchResult.Hits[0].Document, nil
@@ -426,12 +430,12 @@ func (vs *VersionService) CompareVersions(ctx context.Context, serviceID string,
 	// Busca as duas versões
 	oldVer, err := vs.GetVersionByNumber(ctx, serviceID, fromVersion)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao buscar versão %d: %v", fromVersion, err)
+		return nil, fmt.Errorf("erro ao buscar versão %d: %w", fromVersion, err)
 	}
 
 	newVer, err := vs.GetVersionByNumber(ctx, serviceID, toVersion)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao buscar versão %d: %v", toVersion, err)
+		return nil, fmt.Errorf("erro ao buscar versão %d: %w", toVersion, err)
 	}
 
 	// Computa diff

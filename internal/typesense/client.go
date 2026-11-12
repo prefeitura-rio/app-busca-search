@@ -3,8 +3,10 @@ package typesense
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -26,6 +28,15 @@ type Client struct {
 	versionService *services.VersionService
 	gatewayBaseURL string
 	// relevanciaService and filterService REMOVED - no longer used
+}
+
+// ErrServiceNotFound indica que o serviço não existe na collection prefrio_services_base.
+var ErrServiceNotFound = errors.New("serviço não encontrado")
+
+// isTypesenseNotFound diz se o erro é a resposta 404 do Typesense (documento ou collection inexistente).
+func isTypesenseNotFound(err error) bool {
+	var httpErr *typesense.HTTPError
+	return errors.As(err, &httpErr) && httpErr.Status == http.StatusNotFound
 }
 
 func NewClient(cfg *config.Config) *Client {
@@ -1335,11 +1346,14 @@ func (c *Client) ListServiceVersions(ctx context.Context, serviceID string, page
 		service, getErr := c.GetPrefRioService(ctx, serviceID)
 		if getErr != nil {
 			log.Printf("[ListServiceVersions] Erro ao buscar serviço: %v", getErr)
-			// Se o serviço não existe, retorna o erro original (se houver) ou erro de serviço não encontrado
+			// Serviço inexistente (404 do Typesense) é ErrServiceNotFound; qualquer outra falha é erro interno
+			if isTypesenseNotFound(getErr) {
+				return nil, fmt.Errorf("%w: %s", ErrServiceNotFound, serviceID)
+			}
 			if err != nil {
 				return nil, err
 			}
-			return nil, fmt.Errorf("serviço não encontrado: %v", getErr)
+			return nil, fmt.Errorf("erro ao buscar serviço: %w", getErr)
 		}
 
 		log.Printf("[ListServiceVersions] Serviço encontrado: ID=%s, NomeServico=%s, Autor=%s",
@@ -1388,7 +1402,7 @@ func (c *Client) GetServiceVersionByNumber(ctx context.Context, serviceID string
 	version, err := c.versionService.GetVersionByNumber(ctx, serviceID, versionNumber)
 
 	// Se não encontrou e é versão 1, tenta criar automaticamente (lazy migration)
-	if err != nil && versionNumber == 1 && strings.Contains(err.Error(), "não encontrada") {
+	if err != nil && versionNumber == 1 && errors.Is(err, services.ErrVersionNotFound) {
 		// Busca o serviço atual
 		service, getErr := c.GetPrefRioService(ctx, serviceID)
 		if getErr != nil {
@@ -1423,8 +1437,15 @@ func (c *Client) GetLatestServiceVersion(ctx context.Context, serviceID string) 
 }
 
 // CompareServiceVersions compara duas versões de um serviço
+// Versão inexistente de um serviço que também não existe vira ErrServiceNotFound.
 func (c *Client) CompareServiceVersions(ctx context.Context, serviceID string, fromVersion, toVersion int64) (*models.VersionDiff, error) {
-	return c.versionService.CompareVersions(ctx, serviceID, fromVersion, toVersion)
+	diff, err := c.versionService.CompareVersions(ctx, serviceID, fromVersion, toVersion)
+	if errors.Is(err, services.ErrVersionNotFound) {
+		if _, getErr := c.GetPrefRioService(ctx, serviceID); isTypesenseNotFound(getErr) {
+			return nil, fmt.Errorf("%w: %s", ErrServiceNotFound, serviceID)
+		}
+	}
+	return diff, err
 }
 
 // GetPrefRioService busca um serviço específico por ID
@@ -1433,7 +1454,7 @@ func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.Pref
 
 	result, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("serviço não encontrado: %v", err)
+		return nil, fmt.Errorf("serviço não encontrado: %w", err)
 	}
 
 	// Converte o resultado para o struct

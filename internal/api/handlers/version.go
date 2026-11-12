@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"context"
+	"errors"
+	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 	middlewares "github.com/prefeitura-rio/app-busca-search/internal/middleware"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
+	"github.com/prefeitura-rio/app-busca-search/internal/services"
 	"github.com/prefeitura-rio/app-busca-search/internal/typesense"
 )
 
@@ -33,6 +36,7 @@ func NewVersionHandler(client *typesense.Client) *VersionHandler {
 // @Success 200 {object} models.VersionHistory
 // @Failure 400 {object} map[string]string
 // @Failure 401 {object} map[string]string
+// @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/admin/services/{id}/versions [get]
 func (h *VersionHandler) ListServiceVersions(c *gin.Context) {
@@ -48,7 +52,12 @@ func (h *VersionHandler) ListServiceVersions(c *gin.Context) {
 	ctx := context.Background()
 	history, err := h.typesenseClient.ListServiceVersions(ctx, serviceID, page, perPage)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao listar versões: " + err.Error()})
+		if errors.Is(err, typesense.ErrServiceNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço não encontrado"})
+			return
+		}
+		log.Printf("[ListServiceVersions] erro ao listar versões do serviço %s: %v", serviceID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao listar versões"})
 		return
 	}
 
@@ -138,7 +147,15 @@ func (h *VersionHandler) CompareServiceVersions(c *gin.Context) {
 	ctx := context.Background()
 	diff, err := h.typesenseClient.CompareServiceVersions(ctx, serviceID, fromVersion, toVersion)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao comparar versões: " + err.Error()})
+		switch {
+		case errors.Is(err, typesense.ErrServiceNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço não encontrado"})
+		case errors.Is(err, services.ErrVersionNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Versão não encontrada"})
+		default:
+			log.Printf("[CompareServiceVersions] erro ao comparar versões do serviço %s: %v", serviceID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao comparar versões"})
+		}
 		return
 	}
 
