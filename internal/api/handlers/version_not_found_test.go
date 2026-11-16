@@ -25,11 +25,11 @@ var versionFixtures = map[string]map[string]map[string]interface{}{
 	"service_versions": {
 		"svc-1-v1": {
 			"id": "svc-1-v1", "service_id": "svc-1", "version_number": 1, "change_type": "create",
-			"created_by": "Autor Teste", "nome_servico": "Servico Versionado", "resumo": "resumo",
+			"created_by": "Autor Teste", "created_by_cpf": versionFixtureCPF1, "nome_servico": "Servico Versionado", "resumo": "resumo",
 		},
 		"svc-1-v2": {
 			"id": "svc-1-v2", "service_id": "svc-1", "version_number": 2, "change_type": "update",
-			"created_by": "Autor Teste", "nome_servico": "Servico Versionado 2", "resumo": "resumo",
+			"created_by": "Autor Teste", "created_by_cpf": versionFixtureCPF2, "nome_servico": "Servico Versionado 2", "resumo": "resumo",
 		},
 	},
 }

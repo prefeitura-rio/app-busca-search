@@ -1243,7 +1243,7 @@ func (c *Client) UpdatePrefRioServiceWithVersion(ctx context.Context, id string,
 
 	// Valida que temos informações do usuário
 	if userName == "" || userCPF == "" {
-		log.Printf("ERRO: Tentativa de atualizar serviço sem informações do usuário! userName='%s' userCPF='%s'", userName, userCPF)
+		log.Printf("ERRO: Tentativa de atualizar serviço sem informações do usuário! comNome=%t comCPF=%t", userName != "", userCPF != "")
 		return nil, fmt.Errorf("informações do usuário não fornecidas - userName ou userCPF vazios")
 	}
 

@@ -42,8 +42,8 @@ func (vs *VersionService) CaptureVersion(
 	changeReason string,
 	previousVersion *models.ServiceVersion,
 ) (*models.ServiceVersion, error) {
-	log.Printf("[CaptureVersion] Iniciando para serviceID=%s, changeType=%s, createdBy='%s', createdByCPF='%s'",
-		service.ID, changeType, createdBy, createdByCPF)
+	log.Printf("[CaptureVersion] Iniciando para serviceID=%s, changeType=%s, createdBy='%s', comCPF=%t",
+		service.ID, changeType, createdBy, createdByCPF != "")
 
 	// Determina o número da versão
 	versionNumber := int64(1)
@@ -122,8 +122,8 @@ func (vs *VersionService) CaptureVersion(
 		}
 	}
 
-	log.Printf("[CaptureVersion] Prestes a salvar versão: ServiceID=%s, VersionNumber=%d, CreatedBy='%s', CreatedByCPF='%s'",
-		version.ServiceID, version.VersionNumber, version.CreatedBy, version.CreatedByCPF)
+	log.Printf("[CaptureVersion] Prestes a salvar versão: ServiceID=%s, VersionNumber=%d, CreatedBy='%s', comCPF=%t",
+		version.ServiceID, version.VersionNumber, version.CreatedBy, version.CreatedByCPF != "")
 
 	// Salva a versão no Typesense
 	savedVersion, err := vs.SaveVersion(ctx, version)
