@@ -3981,6 +3981,7 @@
             "maxLength": 20000
           },
           "created_by_cpf": {
+            "description": "completo só no Typesense; nas respostas da API, mascarado (WithMaskedCPF)",
             "type": "string",
             "maxLength": 20000
           },
