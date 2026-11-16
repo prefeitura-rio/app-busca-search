@@ -61,7 +61,14 @@ func (h *VersionHandler) ListServiceVersions(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, history)
+	// O CPF de quem editou nunca sai completo: só o nome serve para auditoria na interface.
+	masked := *history
+	masked.Versions = make([]models.ServiceVersion, len(history.Versions))
+	for i, v := range history.Versions {
+		masked.Versions[i] = v.WithMaskedCPF()
+	}
+
+	c.JSON(http.StatusOK, masked)
 }
 
 // GetServiceVersion godoc
@@ -99,7 +106,7 @@ func (h *VersionHandler) GetServiceVersion(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, version)
+	c.JSON(http.StatusOK, version.WithMaskedCPF())
 }
 
 // CompareServiceVersions godoc

@@ -1,5 +1,7 @@
 package models
 
+import "strings"
+
 // FieldChange representa uma mudança em um campo específico
 type FieldChange struct {
 	FieldName string      `json:"field_name" validate:"max=20000" typesense:"field_name"`
@@ -15,7 +17,7 @@ type ServiceVersion struct {
 	VersionNumber     int64  `json:"version_number" validate:"required" typesense:"version_number"`
 	CreatedAt         int64  `json:"created_at" typesense:"created_at"`
 	CreatedBy         string `json:"created_by" validate:"required,max=20000" typesense:"created_by"`
-	CreatedByCPF      string `json:"created_by_cpf" validate:"required,max=20000" typesense:"created_by_cpf"`
+	CreatedByCPF      string `json:"created_by_cpf" validate:"required,max=20000" typesense:"created_by_cpf"` // completo só no Typesense; nas respostas da API, mascarado (WithMaskedCPF)
 	ChangeType        string `json:"change_type" validate:"required,oneof=create update publish unpublish delete rollback" typesense:"change_type"`
 	ChangeReason      string `json:"change_reason,omitempty" validate:"max=20000" typesense:"change_reason,optional"`
 	PreviousVersion   int64  `json:"previous_version,omitempty" typesense:"previous_version,optional"`
@@ -93,4 +95,36 @@ type AuditLogFilter struct {
 	EndDate    int64  `json:"end_date,omitempty"`
 	Page       int    `json:"page"`
 	PerPage    int    `json:"per_page"`
+}
+
+// MaskCPF mascara um CPF para exibição, mantendo só os seis dígitos do meio (***.456.789-**),
+// como o histórico do portal-interno. Vazio continua vazio; qualquer valor que não tenha 11
+// dígitos é ocultado por inteiro ("***"), para nunca devolver um documento completo por engano.
+func MaskCPF(cpf string) string {
+	trimmed := strings.TrimSpace(cpf)
+	if trimmed == "" {
+		return ""
+	}
+	digits := make([]byte, 0, 11)
+	for i := 0; i < len(trimmed); i++ {
+		ch := trimmed[i]
+		switch {
+		case ch >= '0' && ch <= '9':
+			digits = append(digits, ch)
+		case ch == '.' || ch == '-' || ch == ' ':
+		default:
+			return "***"
+		}
+	}
+	if len(digits) != 11 {
+		return "***"
+	}
+	return "***." + string(digits[3:6]) + "." + string(digits[6:9]) + "-**"
+}
+
+// WithMaskedCPF devolve uma cópia da versão com CreatedByCPF mascarado (MaskCPF), para respostas
+// da API. A versão original não é alterada.
+func (v ServiceVersion) WithMaskedCPF() ServiceVersion {
+	v.CreatedByCPF = MaskCPF(v.CreatedByCPF)
+	return v
 }
