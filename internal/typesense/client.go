@@ -1406,8 +1406,11 @@ func (c *Client) GetServiceVersionByNumber(ctx context.Context, serviceID string
 		// Busca o serviço atual
 		service, getErr := c.GetPrefRioService(ctx, serviceID)
 		if getErr != nil {
-			// Se o serviço não existe, retorna erro original
-			return nil, err
+			// Serviço inexistente (404 do Typesense) é ErrServiceNotFound; qualquer outra falha é erro interno
+			if isTypesenseNotFound(getErr) {
+				return nil, fmt.Errorf("%w: %s", ErrServiceNotFound, serviceID)
+			}
+			return nil, fmt.Errorf("erro ao buscar serviço: %w", getErr)
 		}
 
 		// Cria a versão 1 inicial
