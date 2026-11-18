@@ -151,9 +151,10 @@ func (h *SearchHandler) GetDocumentByID(c *gin.Context) {
 	// Busca direta por ID no Typesense (retrieval por chave primária)
 	doc, err := h.typesenseClient.GetPrefRioService(c.Request.Context(), id)
 	if err != nil {
+		// Rota pública: o detalhe do erro do Typesense fica só no log interno
+		log.Printf("[GetDocumentByID] erro ao buscar serviço pelo id %q: %v", id, err)
 		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Serviço não encontrado",
-			"details": err.Error(),
+			"error": "Serviço não encontrado",
 		})
 		return
 	}
