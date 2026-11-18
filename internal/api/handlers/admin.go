@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -291,7 +293,7 @@ func (h *AdminHandler) GetService(c *gin.Context) {
 // @Param is_free query bool false "Filtrar por serviços gratuitos"
 // @Param published_at query int false "Filtrar por data de publicação (timestamp)"
 // @Param nome_servico query string false "Filtrar por nome do serviço"
-// @Param field query string false "Campo para filtro dinâmico"
+// @Param field query string false "Campo para filtro dinâmico (status, author, autor, tema_geral, sub_categoria, awaiting_approval, is_free, published_at ou nome_servico; outro campo responde 400)"
 // @Param value query string false "Valor para filtro dinâmico (usado com field)"
 // @Success 200 {object} models.PrefRioServiceResponse
 // @Failure 400 {object} map[string]string
@@ -352,10 +354,15 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 		filters["nome_servico"] = nomeServico
 	}
 
-	// Filtro dinâmico por campo e valor
+	// Filtro dinâmico por campo e valor: só os campos dos filtros nomeados, com o mesmo tipo
 	if field := c.Query("field"); field != "" {
 		if value := c.Query("value"); value != "" {
-			filters[field] = value
+			key, parsed, err := parseDynamicListFilter(field, value)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			filters[key] = parsed
 		}
 	}
 
@@ -363,11 +370,69 @@ func (h *AdminHandler) ListServices(c *gin.Context) {
 	ctx := context.Background()
 	response, err := h.typesenseClient.ListPrefRioServices(ctx, page, perPage, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao listar serviços: " + err.Error()})
+		log.Printf("[ListServices] erro ao listar serviços: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao listar serviços"})
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+type listFilterKind int
+
+const (
+	listFilterString listFilterKind = iota
+	listFilterStatus
+	listFilterBool
+	listFilterInt64
+)
+
+type listFilterField struct {
+	key  string
+	kind listFilterKind
+}
+
+// dynamicListFilterFields é a lista fixa de campos aceitos em field/value, os mesmos dos filtros
+// nomeados: field vira chave do filter_by do Typesense e nunca pode ser texto livre.
+var dynamicListFilterFields = map[string]listFilterField{
+	"status":            {key: "status", kind: listFilterStatus},
+	"autor":             {key: "autor", kind: listFilterString},
+	"author":            {key: "autor", kind: listFilterString},
+	"tema_geral":        {key: "tema_geral", kind: listFilterString},
+	"sub_categoria":     {key: "sub_categoria", kind: listFilterString},
+	"awaiting_approval": {key: "awaiting_approval", kind: listFilterBool},
+	"is_free":           {key: "is_free", kind: listFilterBool},
+	"published_at":      {key: "published_at", kind: listFilterInt64},
+	"nome_servico":      {key: "nome_servico", kind: listFilterString},
+}
+
+func parseDynamicListFilter(field, value string) (string, interface{}, error) {
+	spec, ok := dynamicListFilterFields[field]
+	if !ok {
+		return "", nil, fmt.Errorf("campo de filtro inválido: use status, author, tema_geral, sub_categoria, awaiting_approval, is_free, published_at ou nome_servico")
+	}
+	switch spec.kind {
+	case listFilterStatus:
+		statusInt, err := strconv.Atoi(value)
+		if err != nil || (statusInt != 0 && statusInt != 1) {
+			return "", nil, fmt.Errorf("valor inválido para status: use 0 ou 1")
+		}
+		return spec.key, statusInt, nil
+	case listFilterBool:
+		parsed, err := strconv.ParseBool(value)
+		if err != nil {
+			return "", nil, fmt.Errorf("valor inválido para %s: use true ou false", field)
+		}
+		return spec.key, parsed, nil
+	case listFilterInt64:
+		parsed, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return "", nil, fmt.Errorf("valor inválido para %s: use um timestamp numérico", field)
+		}
+		return spec.key, parsed, nil
+	default:
+		return spec.key, value, nil
+	}
 }
 
 // PublishService godoc

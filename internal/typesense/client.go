@@ -1673,9 +1673,12 @@ func (c *Client) ListPrefRioServices(ctx context.Context, page, perPage int, fil
 			switch v := value.(type) {
 			case string:
 				if v != "" {
-					// Normaliza strings para melhor busca
-					normalizedValue := utils.NormalizarCategoria(v)
-					filterParts = append(filterParts, fmt.Sprintf("%s:=%s", key, normalizedValue))
+					// Normaliza strings para melhor busca; o valor vem do cliente, então fica entre
+					// backticks e sem backticks internos, para não injetar expressões no filter_by
+					normalizedValue := strings.ReplaceAll(utils.NormalizarCategoria(v), "`", "")
+					if normalizedValue != "" {
+						filterParts = append(filterParts, fmt.Sprintf("%s:=`%s`", key, normalizedValue))
+					}
 				}
 			case int:
 				filterParts = append(filterParts, fmt.Sprintf("%s:=%d", key, v))
