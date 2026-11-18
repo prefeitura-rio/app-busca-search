@@ -102,7 +102,15 @@ func (h *VersionHandler) GetServiceVersion(c *gin.Context) {
 	ctx := context.Background()
 	version, err := h.typesenseClient.GetServiceVersionByNumber(ctx, serviceID, versionNum)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Versão não encontrada: " + err.Error()})
+		switch {
+		case errors.Is(err, typesense.ErrServiceNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço não encontrado"})
+		case errors.Is(err, services.ErrVersionNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Versão não encontrada"})
+		default:
+			log.Printf("[GetServiceVersion] erro ao buscar versão %d do serviço %s: %v", versionNum, serviceID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar versão"})
+		}
 		return
 	}
 
@@ -201,14 +209,23 @@ func (h *VersionHandler) RollbackService(c *gin.Context) {
 	// Busca a versão alvo do rollback
 	targetVersion, err := h.typesenseClient.GetServiceVersionByNumber(ctx, serviceID, request.ToVersion)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Versão alvo não encontrada: " + err.Error()})
+		switch {
+		case errors.Is(err, typesense.ErrServiceNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Serviço não encontrado"})
+		case errors.Is(err, services.ErrVersionNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Versão alvo não encontrada"})
+		default:
+			log.Printf("[RollbackService] erro ao buscar versão alvo %d do serviço %s: %v", request.ToVersion, serviceID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar versão alvo"})
+		}
 		return
 	}
 
 	// Busca a versão atual para diff
 	currentVersion, err := h.typesenseClient.GetLatestServiceVersion(ctx, serviceID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar versão atual: " + err.Error()})
+		log.Printf("[RollbackService] erro ao buscar versão atual do serviço %s: %v", serviceID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar versão atual"})
 		return
 	}
 
@@ -254,7 +271,8 @@ func (h *VersionHandler) RollbackService(c *gin.Context) {
 		changeReason,
 	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao realizar rollback: " + err.Error()})
+		log.Printf("[RollbackService] erro ao realizar rollback do serviço %s para a versão %d: %v", serviceID, request.ToVersion, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao realizar rollback"})
 		return
 	}
 
