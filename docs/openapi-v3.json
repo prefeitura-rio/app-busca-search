@@ -422,7 +422,7 @@
             }
           },
           {
-            "description": "Campo para filtro dinâmico",
+            "description": "Campo para filtro dinâmico (status, author, autor, tema_geral, sub_categoria, awaiting_approval, is_free, published_at ou nome_servico; outro campo responde 400)",
             "name": "field",
             "in": "query",
             "schema": {
