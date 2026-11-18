@@ -1457,7 +1457,11 @@ func (c *Client) GetPrefRioService(ctx context.Context, id string) (*models.Pref
 
 	result, err := c.client.Collection(collectionName).Document(id).Retrieve(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("serviço não encontrado: %w", err)
+		// Só o 404 do Typesense é serviço inexistente; qualquer outra falha é erro interno
+		if isTypesenseNotFound(err) {
+			return nil, fmt.Errorf("%w: %s: %w", ErrServiceNotFound, id, err)
+		}
+		return nil, fmt.Errorf("erro ao buscar serviço %s: %w", id, err)
 	}
 
 	// Converte o resultado para o struct
