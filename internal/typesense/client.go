@@ -1425,7 +1425,7 @@ func (c *Client) GetServiceVersionByNumber(ctx context.Context, serviceID string
 		)
 		if createErr != nil {
 			log.Printf("Aviso: não foi possível criar versão inicial para serviço %s: %v", serviceID, createErr)
-			return nil, err // Retorna erro original
+			return nil, fmt.Errorf("erro ao criar versão inicial: %w", createErr)
 		}
 
 		return initialVersion, nil

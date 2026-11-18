@@ -20,10 +20,14 @@ const versionFakeTypesenseLeak = "detalhe-interno-do-typesense"
 // Serviço cuja leitura no Typesense falso responde 503 (falha interna, não "não encontrado").
 const versionFailingServiceID = "svc-falha"
 
+// Serviço legado sem versões: a versão 1 é criada sob demanda, e toda gravação no Typesense falso falha.
+const versionUnversionedServiceID = "svc-legado"
+
 // Documentos sintéticos do Typesense falso das rotas de versão, por collection e id.
 var versionFixtures = map[string]map[string]map[string]interface{}{
 	"prefrio_services_base": {
-		"svc-1": {"id": "svc-1", "nome_servico": "Servico Versionado", "resumo": "resumo", "status": 1},
+		"svc-1":                     {"id": "svc-1", "nome_servico": "Servico Versionado", "resumo": "resumo", "status": 1},
+		versionUnversionedServiceID: {"id": versionUnversionedServiceID, "nome_servico": "Servico Legado", "resumo": "resumo", "status": 1},
 	},
 	"service_versions": {
 		"svc-1-v1": {
@@ -165,6 +169,12 @@ func TestGetServiceVersionNotFoundAndInternalErrors(t *testing.T) {
 			wantCode:  http.StatusInternalServerError,
 			wantError: "Erro ao buscar versão",
 		},
+		{
+			name:      "falha ao gravar a versão 1 de serviço legado responde 500, não 404",
+			path:      "/api/v1/admin/services/" + versionUnversionedServiceID + "/versions/1",
+			wantCode:  http.StatusInternalServerError,
+			wantError: "Erro ao buscar versão",
+		},
 	}
 
 	for _, tt := range tests {
@@ -224,6 +234,13 @@ func TestRollbackServiceNotFoundAndInternalErrors(t *testing.T) {
 			name:      "rollback com Typesense fora responde 500 sem detalhe interno",
 			failAll:   true,
 			serviceID: "svc-1",
+			body:      `{"to_version":1}`,
+			wantCode:  http.StatusInternalServerError,
+			wantError: "Erro ao buscar versão alvo",
+		},
+		{
+			name:      "rollback para a versão 1 de serviço legado que falha ao gravá-la responde 500",
+			serviceID: versionUnversionedServiceID,
 			body:      `{"to_version":1}`,
 			wantCode:  http.StatusInternalServerError,
 			wantError: "Erro ao buscar versão alvo",
