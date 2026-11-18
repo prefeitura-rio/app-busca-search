@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -153,8 +154,14 @@ func (h *SearchHandler) GetDocumentByID(c *gin.Context) {
 	if err != nil {
 		// Rota pública: o detalhe do erro do Typesense fica só no log interno
 		log.Printf("[GetDocumentByID] erro ao buscar serviço pelo id %q: %v", id, err)
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Serviço não encontrado",
+		if errors.Is(err, typesense.ErrServiceNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "Serviço não encontrado",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Erro ao buscar serviço",
 		})
 		return
 	}
