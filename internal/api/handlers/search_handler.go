@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prefeitura-rio/app-busca-search/internal/models"
@@ -32,7 +34,7 @@ func NewSearchHandler(searchService *services.SearchService, typesenseClient *ty
 // @Tags search
 // @Accept json
 // @Produce json
-// @Param q query string true "Texto da busca"
+// @Param q query string true "Texto da busca (máximo: 1000 caracteres)"
 // @Param type query string true "Tipo de busca: keyword, semantic, hybrid ou ai"
 // @Param page query int false "Número da página (mínimo: 1)" default(1)
 // @Param per_page query int false "Resultados por página (máximo: 100)" default(10)
@@ -45,7 +47,7 @@ func NewSearchHandler(searchService *services.SearchService, typesenseClient *ty
 // @Param generate_scores query bool false "Gera scores detalhados via LLM para os resultados (apenas type=ai)." default(false)
 // @Param recency_boost query bool false "Aplica boost por recência: docs atualizados nos últimos 30 dias mantêm score, docs mais antigos sofrem decay gradual" default(false)
 // @Success 200 {object} models.SearchResponse
-// @Failure 400 {object} map[string]string
+// @Failure 400 {object} map[string]string "Parâmetros inválidos, tipo de busca inválido ou texto da busca muito longo"
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/search [get]
 func (h *SearchHandler) Search(c *gin.Context) {
@@ -109,6 +111,15 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		return
 	}
 
+	// Validar tamanho do texto da busca antes de chamar o Typesense (DEV-681)
+	if !isSearchQueryWithinLimit(req.Query) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Texto da busca muito longo",
+			"details": fmt.Sprintf("O parâmetro q aceita no máximo %d caracteres", MaxSearchQueryLength),
+		})
+		return
+	}
+
 	// Executar busca
 	result, err := h.searchService.Search(c.Request.Context(), &req)
 	if err != nil {
@@ -119,14 +130,30 @@ func (h *SearchHandler) Search(c *gin.Context) {
 			return
 		}
 
+		// Rota pública: o detalhe do erro do Typesense fica só no log interno
+		log.Printf("[Search] erro ao executar busca %s: %v", req.Type, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Erro ao executar busca",
-			"details": err.Error(),
+			"error": "Erro ao executar busca",
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// MaxSearchQueryLength é o maior texto de busca (parâmetro q, em caracteres) aceito por
+// GET /api/v1/search.
+const MaxSearchQueryLength = 1000
+
+// maxSearchQueryEncodedLength limita o q codificado na URL. O Typesense recusa a busca GET
+// cuja query string passa de 4000 caracteres; com esta margem, os demais parâmetros da busca
+// keyword cabem mesmo quando o texto tem só caracteres multibyte (cada byte vira %XX).
+const maxSearchQueryEncodedLength = 3500
+
+// isSearchQueryWithinLimit indica se o texto da busca cabe nos limites da rota.
+func isSearchQueryWithinLimit(q string) bool {
+	return utf8.RuneCountInString(q) <= MaxSearchQueryLength &&
+		len(url.QueryEscape(q)) <= maxSearchQueryEncodedLength
 }
 
 // GetDocumentByID godoc
