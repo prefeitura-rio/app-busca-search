@@ -112,10 +112,10 @@ func (h *SearchHandler) Search(c *gin.Context) {
 	}
 
 	// Validar tamanho do texto da busca antes de chamar o Typesense (DEV-681)
-	if !isSearchQueryWithinLimit(req.Query) {
+	if reason := searchQueryTooLongReason(req.Query); reason != "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Texto da busca muito longo",
-			"details": fmt.Sprintf("O parâmetro q aceita no máximo %d caracteres", MaxSearchQueryLength),
+			"details": reason,
 		})
 		return
 	}
@@ -150,10 +150,16 @@ const MaxSearchQueryLength = 1000
 // keyword cabem mesmo quando o texto tem só caracteres multibyte (cada byte vira %XX).
 const maxSearchQueryEncodedLength = 3500
 
-// isSearchQueryWithinLimit indica se o texto da busca cabe nos limites da rota.
-func isSearchQueryWithinLimit(q string) bool {
-	return utf8.RuneCountInString(q) <= MaxSearchQueryLength &&
-		len(url.QueryEscape(q)) <= maxSearchQueryEncodedLength
+// searchQueryTooLongReason devolve o motivo da recusa quando o texto da busca passa dos limites
+// da rota, ou "" quando ele cabe.
+func searchQueryTooLongReason(q string) string {
+	if utf8.RuneCountInString(q) > MaxSearchQueryLength {
+		return fmt.Sprintf("O parâmetro q aceita no máximo %d caracteres", MaxSearchQueryLength)
+	}
+	if len(url.QueryEscape(q)) > maxSearchQueryEncodedLength {
+		return "O parâmetro q excede o tamanho máximo aceito: emojis e outros caracteres especiais ocupam mais espaço"
+	}
+	return ""
 }
 
 // GetDocumentByID godoc

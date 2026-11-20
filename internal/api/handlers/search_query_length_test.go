@@ -85,13 +85,16 @@ func assertNoTypesenseLeak(t *testing.T, raw string) {
 // Texto de busca acima do limite responde 400 com mensagem genérica, sem chamar o Typesense
 // e sem vazar o erro dele, em todos os tipos de busca da v1 (DEV-681).
 func TestSearchV1QueryTooLongIsBadRequest(t *testing.T) {
+	charLimit := "O parâmetro q aceita no máximo 1000 caracteres"
+	encodedLimit := "O parâmetro q excede o tamanho máximo aceito: emojis e outros caracteres especiais ocupam mais espaço"
 	tests := []struct {
-		name string
-		q    string
+		name    string
+		q       string
+		details string
 	}{
-		{"5000 caracteres ASCII", strings.Repeat("a", 5000)},
-		{"limite + 1 caractere", strings.Repeat("a", MaxSearchQueryLength+1)},
-		{"abaixo do limite em caracteres, multibyte acima do limite codificado", strings.Repeat("😀", 292)},
+		{"5000 caracteres ASCII", strings.Repeat("a", 5000), charLimit},
+		{"limite + 1 caractere", strings.Repeat("a", MaxSearchQueryLength+1), charLimit},
+		{"abaixo do limite em caracteres, multibyte acima do limite codificado", strings.Repeat("😀", 292), encodedLimit},
 	}
 	for _, tt := range tests {
 		for _, searchType := range []string{"keyword", "hybrid", "semantic", "ai"} {
@@ -109,6 +112,9 @@ func TestSearchV1QueryTooLongIsBadRequest(t *testing.T) {
 				}
 				if body["error"] != "Texto da busca muito longo" {
 					t.Errorf("error = %v, esperado \"Texto da busca muito longo\"", body["error"])
+				}
+				if body["details"] != tt.details {
+					t.Errorf("details = %v, esperado %q", body["details"], tt.details)
 				}
 				assertNoTypesenseLeak(t, w.Body.String())
 				if n := atomic.LoadInt32(&calls); n != 0 {
