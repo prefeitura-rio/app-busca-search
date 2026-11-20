@@ -2179,7 +2179,7 @@
         "summary": "Busca unificada de serviços públicos",
         "parameters": [
           {
-            "description": "Texto da busca",
+            "description": "Texto da busca (máximo: 1000 caracteres)",
             "name": "q",
             "in": "query",
             "required": true,
@@ -2295,7 +2295,7 @@
             }
           },
           "400": {
-            "description": "Bad Request",
+            "description": "Parâmetros inválidos, tipo de busca inválido ou texto da busca muito longo",
             "content": {
               "application/json": {
                 "schema": {
